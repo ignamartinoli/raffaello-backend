@@ -8,12 +8,14 @@ class User(BaseModel):
 
     id: int
     email: str
+    name: str
     role_id: int
     role: Role
 
 
 class UserCreate(BaseModel):
     email: EmailStr
+    name: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=8)
     role_id: int | None = None  # If not provided, defaults to "tenant"
 

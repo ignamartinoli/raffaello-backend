@@ -125,6 +125,7 @@ def admin_user(db: Session) -> dict:
     return {
         "id": user.id,
         "email": user.email,
+        "name": user.name,
         "password": settings.first_admin_password,  # Plaintext password from env
         "role_id": user.role_id,
     }
@@ -143,6 +144,7 @@ def tenant_user_dict(db: Session) -> dict:
     from app.core.security import get_password_hash
     
     email = "tenant@example.com"
+    name = "Test Tenant"
     password = "TenantPass123!"
     
     # Get tenant role
@@ -153,6 +155,7 @@ def tenant_user_dict(db: Session) -> dict:
     # Create user
     user = UserModel(
         email=email,
+        name=name,
         password_hash=get_password_hash(password),
         role_id=tenant_role.id,
     )
@@ -163,6 +166,7 @@ def tenant_user_dict(db: Session) -> dict:
     return {
         "id": user.id,
         "email": user.email,
+        "name": name,
         "password": password,
         "role_id": user.role_id,
     }

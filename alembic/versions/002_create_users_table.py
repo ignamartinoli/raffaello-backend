@@ -28,6 +28,7 @@ def upgrade() -> None:
         "users",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("email", sa.String(320), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
         sa.Column("password_hash", sa.String(), nullable=False),
         sa.Column("role_id", sa.Integer(), nullable=False),
         sa.Column("password_reset_token", sa.String(), nullable=True),
@@ -60,11 +61,12 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             """
-            INSERT INTO users (email, password_hash, role_id)
-            VALUES (:email, :password_hash, :role_id)
+            INSERT INTO users (email, name, password_hash, role_id)
+            VALUES (:email, :name, :password_hash, :role_id)
             """
         ).bindparams(
             email=settings.first_admin_email,
+            name="Admin",
             password_hash=password_hash,
             role_id=admin_role_id,
         )
