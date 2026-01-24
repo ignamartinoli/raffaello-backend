@@ -1,9 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.repositories.user import (
-    get_user_by_email,
-    create_user as create_user_repo,
-)
+import app.repositories.user as user_repo
 from app.db.models.role import Role as RoleModel
 from app.schemas.user import UserCreate
 from app.core.security import validate_password, get_password_hash
@@ -20,7 +17,7 @@ def create_user(db: Session, user_data: UserCreate) -> UserModel:
     - Defaults to "tenant" role if role_id not provided
     """
     # Check if email already exists
-    existing_user = get_user_by_email(db, user_data.email)
+    existing_user = user_repo.get_user_by_email(db, user_data.email)
     if existing_user:
         raise ValueError("Email already registered")
     
@@ -47,7 +44,7 @@ def create_user(db: Session, user_data: UserCreate) -> UserModel:
     password_hash = get_password_hash(user_data.password)
     
     # Use repository for actual database operation (pure data access)
-    return create_user_repo(
+    return user_repo.create_user(
         db,
         email=user_data.email,
         name=user_data.name,

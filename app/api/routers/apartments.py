@@ -2,12 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin, require_admin_or_accountant
-from app.repositories.apartment import (
-    get_apartment_by_id as get_apartment_by_id_repo,
-    get_all_apartments as get_all_apartments_repo,
-    create_apartment as create_apartment_repo,
-    update_apartment as update_apartment_repo,
-)
+import app.repositories.apartment as apartment_repo
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 
 router = APIRouter(prefix="/apartments", tags=["apartments"])
@@ -23,7 +18,7 @@ def create_new_apartment(
     Create a new apartment. Only admin users can create apartments.
     """
     try:
-        apartment = create_apartment_repo(
+        apartment = apartment_repo.create_apartment(
             db,
             floor=apartment_data.floor,
             letter=apartment_data.letter,
@@ -50,7 +45,7 @@ def get_all_apartments(
     """
     Get all apartments. Both admin and accountant users can see all apartments.
     """
-    apartments = get_all_apartments_repo(db)
+    apartments = apartment_repo.get_all_apartments(db)
     return [Apartment.model_validate(apt) for apt in apartments]
 
 
@@ -63,7 +58,7 @@ def get_apartment_by_id(
     """
     Get an apartment by ID. Both admin and accountant users can see apartments.
     """
-    apartment = get_apartment_by_id_repo(db, apartment_id)
+    apartment = apartment_repo.get_apartment_by_id(db, apartment_id)
     if not apartment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -83,7 +78,7 @@ def update_apartment_by_id(
     Update an apartment. Only admin users can update apartments.
     """
     try:
-        apartment = update_apartment_repo(
+        apartment = apartment_repo.update_apartment(
             db,
             apartment_id=apartment_id,
             floor=apartment_data.floor,
