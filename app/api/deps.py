@@ -66,3 +66,13 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Not enough permissions",
         )
     return current_user
+
+
+def require_admin_or_accountant(current_user: User = Depends(get_current_user)) -> User:
+    """Require the current user to have admin or accountant role."""
+    if current_user.role.name not in ("admin", "accountant"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    return current_user
