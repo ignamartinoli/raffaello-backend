@@ -50,6 +50,7 @@ def create_user(db: Session, user_data: UserCreate) -> UserModel:
     return create_user_repo(
         db,
         email=user_data.email,
+        name=user_data.name,
         password_hash=password_hash,
         role_id=role_id,
     )

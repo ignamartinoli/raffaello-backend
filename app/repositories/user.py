@@ -29,12 +29,14 @@ def get_user_by_reset_token(db: Session, token: str) -> UserModel | None:
 def create_user(
     db: Session,
     email: str,
+    name: str,
     password_hash: str,
     role_id: int,
 ) -> UserModel:
     """Create a new user in the database. Pure data access - no business logic."""
     db_user = UserModel(
         email=email,
+        name=name,
         password_hash=password_hash,
         role_id=role_id,
     )

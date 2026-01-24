@@ -64,6 +64,7 @@ def test_create_user_as_admin_success(client, db: Session, admin_token: str):
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "NewPassword123!",
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -71,6 +72,7 @@ def test_create_user_as_admin_success(client, db: Session, admin_token: str):
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "newuser@example.com"
+    assert data["name"] == "New User"
     assert "password_hash" not in data  # Password hash should not be exposed
     # New user should be assigned "tenant" role by default
     assert data["role_id"] == 2  # tenant role id
@@ -82,6 +84,7 @@ def test_create_user_with_specific_role(client, db: Session, admin_token: str):
         "/api/v1/users",
         json={
             "email": "accountant@example.com",
+            "name": "John Accountant",
             "password": "AccPassword123!",
             "role_id": 3,  # accountant role
         },
@@ -90,6 +93,7 @@ def test_create_user_with_specific_role(client, db: Session, admin_token: str):
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "accountant@example.com"
+    assert data["name"] == "John Accountant"
     assert data["role_id"] == 3
 
 
@@ -99,6 +103,7 @@ def test_create_user_without_authentication(client, db: Session):
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "NewPassword123!",
         },
     )
@@ -111,6 +116,7 @@ def test_create_user_as_non_admin(client, db: Session, tenant_user_dict: dict, t
         "/api/v1/users",
         json={
             "email": "another@example.com",
+            "name": "Another User",
             "password": "AnotherPass123!",
         },
         headers={"Authorization": f"Bearer {tenant_token}"},
@@ -125,6 +131,7 @@ def test_create_user_email_already_exists(client, db: Session, admin_token: str,
         "/api/v1/users",
         json={
             "email": admin_user["email"],  # Already exists
+            "name": "Duplicate User",
             "password": "NewPassword123!",
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -139,6 +146,7 @@ def test_create_user_invalid_password_too_short(client, db: Session, admin_token
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "Short1!",  # Only 7 chars, needs 8+
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -153,6 +161,7 @@ def test_create_user_invalid_password_no_uppercase(client, db: Session, admin_to
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "password123!",  # No uppercase
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -167,6 +176,7 @@ def test_create_user_invalid_password_no_lowercase(client, db: Session, admin_to
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "PASSWORD123!",  # No lowercase
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -181,6 +191,7 @@ def test_create_user_invalid_password_no_number(client, db: Session, admin_token
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "Password!",  # No number
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -195,6 +206,7 @@ def test_create_user_invalid_password_no_symbol(client, db: Session, admin_token
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "Password123",  # No symbol
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -209,6 +221,7 @@ def test_create_user_invalid_role_id(client, db: Session, admin_token: str):
         "/api/v1/users",
         json={
             "email": "newuser@example.com",
+            "name": "New User",
             "password": "NewPassword123!",
             "role_id": 999,  # Non-existent role
         },

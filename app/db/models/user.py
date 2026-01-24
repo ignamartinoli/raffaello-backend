@@ -9,6 +9,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(320), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
     password_hash = Column(String, nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     password_reset_token = Column(String, nullable=True, index=True)
@@ -16,3 +17,4 @@ class User(Base):
 
     # Relationship
     role = relationship("Role", backref="users")
+
