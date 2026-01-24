@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin, require_admin_or_accountant
+from app.api.deps import get_db, require_roles
 import app.repositories.apartment as apartment_repo
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/apartments", tags=["apartments"])
 def create_new_apartment(
     apartment_data: ApartmentCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_admin),
+    current_user = Depends(require_roles("admin")),
 ):
     """
     Create a new apartment. Only admin users can create apartments.
@@ -40,7 +40,7 @@ def create_new_apartment(
 @router.get("", response_model=list[Apartment])
 def get_all_apartments(
     db: Session = Depends(get_db),
-    current_user = Depends(require_admin_or_accountant),
+    current_user = Depends(require_roles("admin", "accountant")),
 ):
     """
     Get all apartments. Both admin and accountant users can see all apartments.
@@ -53,7 +53,7 @@ def get_all_apartments(
 def get_apartment_by_id(
     apartment_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_admin_or_accountant),
+    current_user = Depends(require_roles("admin", "accountant")),
 ):
     """
     Get an apartment by ID. Both admin and accountant users can see apartments.
@@ -72,7 +72,7 @@ def update_apartment_by_id(
     apartment_id: int,
     apartment_data: ApartmentUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_admin),
+    current_user = Depends(require_roles("admin")),
 ):
     """
     Update an apartment. Only admin users can update apartments.

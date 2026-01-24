@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_roles
 from app.services.user import create_user
 from app.schemas.user import UserCreate, User
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 def create_new_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_roles("admin")),
 ):
     """
     Create a new user. Only admin users can create users.

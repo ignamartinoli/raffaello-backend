@@ -58,21 +58,26 @@ def get_current_user(
     return user
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require the current user to have admin role."""
-    if current_user.role.name != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
-        )
-    return current_user
-
-
-def require_admin_or_accountant(current_user: User = Depends(get_current_user)) -> User:
-    """Require the current user to have admin or accountant role."""
-    if current_user.role.name not in ("admin", "accountant"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
-        )
-    return current_user
+def require_roles(*role_names: str):
+    """
+    Create a dependency that requires the current user to have one of the specified roles.
+    
+    Args:
+        *role_names: Variable number of role name strings to allow
+        
+    Returns:
+        A dependency function that checks if the user has one of the required roles
+        
+    Example:
+        Depends(require_roles("admin"))
+        Depends(require_roles("admin", "accountant"))
+    """
+    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role.name not in role_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+        return current_user
+    
+    return role_checker
