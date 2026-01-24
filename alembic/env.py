@@ -11,6 +11,7 @@ from app.core.config import settings
 
 # Import all models so Alembic can discover them
 from app.db.models.role import Role  # noqa: F401
+from app.db.models.user import User  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
