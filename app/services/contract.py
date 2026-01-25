@@ -5,6 +5,7 @@ import app.repositories.contract as contract_repo
 import app.repositories.user as user_repo
 import app.repositories.apartment as apartment_repo
 from app.db.models.contract import Contract as ContractModel
+from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
 
 
 def create_contract(
@@ -29,27 +30,27 @@ def create_contract(
     
     # Validate end_date doesn't precede start_date
     if end_date is not None and end_date < start_date:
-        raise ValueError(f"end_date ({end_date}) cannot precede start_date ({start_date})")
+        raise DomainValidationError(f"end_date ({end_date}) cannot precede start_date ({start_date})")
     
     # Validate user exists and has tenant role
     user = user_repo.get_user_by_id(db, user_id)
     if not user:
-        raise ValueError(f"User with id {user_id} not found")
+        raise NotFoundError(f"User with id {user_id} not found")
     
     if user.role.name != "tenant":
-        raise ValueError(f"User with id {user_id} must have 'tenant' role")
+        raise DomainValidationError(f"User with id {user_id} must have 'tenant' role")
     
     # Validate apartment exists
     apartment = apartment_repo.get_apartment_by_id(db, apartment_id)
     if not apartment:
-        raise ValueError(f"Apartment with id {apartment_id} not found")
+        raise NotFoundError(f"Apartment with id {apartment_id} not found")
     
     # Check for duplicate contract (same start_date and apartment_id)
     existing_contract = contract_repo.get_contract_by_start_date_and_apartment(
         db, start_date, apartment_id
     )
     if existing_contract:
-        raise ValueError(
+        raise DuplicateResourceError(
             f"Contract already exists for apartment {apartment_id} starting on {start_date.strftime('%Y-%m-%d')}"
         )
     
@@ -83,7 +84,7 @@ def update_contract(
     # Get existing contract
     existing_contract = contract_repo.get_contract_by_id(db, contract_id)
     if not existing_contract:
-        raise ValueError("Contract not found")
+        raise NotFoundError("Contract not found")
     
     # Extract fields from update_fields
     user_id = update_fields.get("user_id")
@@ -98,7 +99,7 @@ def update_contract(
     if month is not None or year is not None:
         # If month or year is provided, we need both
         if month is None or year is None:
-            raise ValueError("Both month and year must be provided together")
+            raise DomainValidationError("Both month and year must be provided together")
         
         # Convert month/year to first of month date
         new_start_date = date(year, month, 1)
@@ -112,22 +113,22 @@ def update_contract(
     if "end_date" in update_fields:
         # end_date is being updated (either explicitly set to None or a date)
         if end_date is not None and end_date < final_start_date:
-            raise ValueError(f"end_date ({end_date}) cannot precede start_date ({final_start_date})")
+            raise DomainValidationError(f"end_date ({end_date}) cannot precede start_date ({final_start_date})")
     
     # Validate user if provided
     if user_id is not None:
         user = user_repo.get_user_by_id(db, user_id)
         if not user:
-            raise ValueError(f"User with id {user_id} not found")
+            raise NotFoundError(f"User with id {user_id} not found")
         
         if user.role.name != "tenant":
-            raise ValueError(f"User with id {user_id} must have 'tenant' role")
+            raise DomainValidationError(f"User with id {user_id} must have 'tenant' role")
     
     # Validate apartment if provided
     if apartment_id is not None:
         apartment = apartment_repo.get_apartment_by_id(db, apartment_id)
         if not apartment:
-            raise ValueError(f"Apartment with id {apartment_id} not found")
+            raise NotFoundError(f"Apartment with id {apartment_id} not found")
     
     # Check for duplicate contract if start_date or apartment_id is being changed
     final_apartment_id = apartment_id if apartment_id is not None else existing_contract.apartment_id
@@ -139,7 +140,7 @@ def update_contract(
         )
         # If duplicate exists and it's not the current contract, raise error
         if duplicate_contract and duplicate_contract.id != contract_id:
-            raise ValueError(
+            raise DuplicateResourceError(
                 f"Contract already exists for apartment {final_apartment_id} starting on {final_start_date.strftime('%Y-%m-%d')}"
             )
     

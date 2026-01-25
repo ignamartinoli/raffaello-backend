@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.db.models.user import User as UserModel
+from app.errors import NotFoundError
 
 
 def get_user_by_email(db: Session, email: str) -> UserModel | None:
@@ -50,7 +51,7 @@ def update_user_password(db: Session, user_id: int, password_hash: str) -> UserM
     """Update a user's password."""
     user = get_user_by_id(db, user_id)
     if not user:
-        raise ValueError("User not found")
+        raise NotFoundError("User not found")
     
     user.password_hash = password_hash
     user.password_reset_token = None
@@ -66,7 +67,7 @@ def set_password_reset_token(
     """Set password reset token for a user."""
     user = get_user_by_id(db, user_id)
     if not user:
-        raise ValueError("User not found")
+        raise NotFoundError("User not found")
     
     user.password_reset_token = token
     user.password_reset_expires = expires

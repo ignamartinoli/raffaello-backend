@@ -6,6 +6,7 @@ from app.services.contract import create_contract, update_contract
 import app.repositories.contract as contract_repo
 from app.schemas.contract import Contract, ContractCreate, ContractUpdate
 from app.db.models.user import User
+from app.errors import NotFoundError
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
 
@@ -19,22 +20,15 @@ def create_new_contract(
     """
     Create a new contract. Only admin users can create contracts.
     """
-    try:
-        contract = create_contract(
-            db,
-            user_id=contract_data.user_id,
-            apartment_id=contract_data.apartment_id,
-            month=contract_data.month,
-            year=contract_data.year,
-            end_date=contract_data.end_date,
-            adjustment_months=contract_data.adjustment_months,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    
+    contract = create_contract(
+        db,
+        user_id=contract_data.user_id,
+        apartment_id=contract_data.apartment_id,
+        month=contract_data.month,
+        year=contract_data.year,
+        end_date=contract_data.end_date,
+        adjustment_months=contract_data.adjustment_months,
+    )
     return Contract.model_validate(contract)
 
 
@@ -74,10 +68,7 @@ def get_contract_by_id(
     """
     contract = contract_repo.get_contract_by_id(db, contract_id)
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contract not found",
-        )
+        raise NotFoundError("Contract not found")
     
     # Check access: tenant can only see their own contracts
     if current_user.role.name == "tenant" and contract.user_id != current_user.id:
@@ -102,14 +93,6 @@ def update_contract_by_id(
     Fields not included in the request are not updated.
     To clear a field (set to null), explicitly include it with null value.
     """
-    try:
-        # Get only fields that were explicitly set in the request
-        update_data = contract_data.model_dump(exclude_unset=True)
-        contract = update_contract(db, contract_id=contract_id, **update_data)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    
+    update_data = contract_data.model_dump(exclude_unset=True)
+    contract = update_contract(db, contract_id=contract_id, **update_data)
     return Contract.model_validate(contract)
