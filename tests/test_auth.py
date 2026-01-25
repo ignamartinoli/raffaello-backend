@@ -75,7 +75,7 @@ def test_create_user_as_admin_success(client, db: Session, admin_token: str):
     assert data["name"] == "New User"
     assert "password_hash" not in data  # Password hash should not be exposed
     # New user should be assigned "tenant" role by default
-    assert data["role_id"] == 2  # tenant role id
+    assert data["role"]["id"] == 2  # tenant role id
 
 
 def test_create_user_with_specific_role(client, db: Session, admin_token: str):
@@ -94,7 +94,7 @@ def test_create_user_with_specific_role(client, db: Session, admin_token: str):
     data = response.json()
     assert data["email"] == "accountant@example.com"
     assert data["name"] == "John Accountant"
-    assert data["role_id"] == 3
+    assert data["role"]["id"] == 3
 
 
 def test_create_user_without_authentication(client, db: Session):
@@ -110,7 +110,9 @@ def test_create_user_without_authentication(client, db: Session):
     assert response.status_code == 401  # Missing authentication credentials
 
 
-def test_create_user_as_non_admin(client, db: Session, tenant_user_dict: dict, tenant_token: str):
+def test_create_user_as_non_admin(
+    client, db: Session, tenant_user_dict: dict, tenant_token: str
+):
     """Test user creation by non-admin fails."""
     response = client.post(
         "/api/v1/users",
@@ -125,7 +127,9 @@ def test_create_user_as_non_admin(client, db: Session, tenant_user_dict: dict, t
     assert "Not enough permissions" in response.json()["detail"]
 
 
-def test_create_user_email_already_exists(client, db: Session, admin_token: str, admin_user: dict):
+def test_create_user_email_already_exists(
+    client, db: Session, admin_token: str, admin_user: dict
+):
     """Test user creation with duplicate email fails."""
     response = client.post(
         "/api/v1/users",
@@ -155,7 +159,9 @@ def test_create_user_invalid_password_too_short(client, db: Session, admin_token
     assert response.status_code == 422
 
 
-def test_create_user_invalid_password_no_uppercase(client, db: Session, admin_token: str):
+def test_create_user_invalid_password_no_uppercase(
+    client, db: Session, admin_token: str
+):
     """Test user creation with no uppercase letter fails."""
     response = client.post(
         "/api/v1/users",
@@ -170,7 +176,9 @@ def test_create_user_invalid_password_no_uppercase(client, db: Session, admin_to
     assert "uppercase" in response.json()["detail"]
 
 
-def test_create_user_invalid_password_no_lowercase(client, db: Session, admin_token: str):
+def test_create_user_invalid_password_no_lowercase(
+    client, db: Session, admin_token: str
+):
     """Test user creation with no lowercase letter fails."""
     response = client.post(
         "/api/v1/users",
@@ -236,7 +244,9 @@ def test_create_user_invalid_role_id(client, db: Session, admin_token: str):
 # ============================================================================
 
 
-def test_get_current_user_success(client, db: Session, admin_token: str, admin_user: dict):
+def test_get_current_user_success(
+    client, db: Session, admin_token: str, admin_user: dict
+):
     """Test getting current user info with valid token."""
     response = client.get(
         "/api/v1/auth/me",
