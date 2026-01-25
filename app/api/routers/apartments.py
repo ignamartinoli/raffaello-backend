@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, require_roles
 import app.repositories.apartment as apartment_repo
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
+from app.errors import DuplicateResourceError
 
 router = APIRouter(prefix="/apartments", tags=["apartments"])
 
@@ -28,9 +29,9 @@ def create_new_apartment(
             epec_contract=apartment_data.epec_contract,
             water=apartment_data.water,
         )
-    except ValueError as e:
+    except DuplicateResourceError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
         )
     
@@ -89,7 +90,13 @@ def update_apartment_by_id(
             epec_contract=apartment_data.epec_contract,
             water=apartment_data.water,
         )
+    except DuplicateResourceError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
     except ValueError as e:
+        # ValueError is used for "not found" cases
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),

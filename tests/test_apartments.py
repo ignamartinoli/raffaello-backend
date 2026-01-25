@@ -176,6 +176,73 @@ def test_create_apartment_missing_required_fields(client, db: Session, admin_tok
     assert response.status_code == 422
 
 
+def test_create_apartment_duplicate_floor_letter(client, db: Session, admin_token: str):
+    """Test apartment creation with duplicate floor and letter fails."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create first apartment
+    create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Try to create another apartment with same floor and letter
+    response = client.post(
+        "/api/v1/apartments",
+        json={
+            "floor": 1,
+            "letter": "A",
+            "is_mine": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 409  # Conflict
+    assert "already exists" in response.json()["detail"].lower()
+
+
+def test_create_apartment_same_floor_different_letter(client, db: Session, admin_token: str):
+    """Test that apartments with same floor but different letter can be created."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create first apartment
+    create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create another apartment with same floor but different letter (should succeed)
+    response = client.post(
+        "/api/v1/apartments",
+        json={
+            "floor": 1,
+            "letter": "B",
+            "is_mine": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["floor"] == 1
+    assert data["letter"] == "B"
+
+
+def test_create_apartment_same_letter_different_floor(client, db: Session, admin_token: str):
+    """Test that apartments with same letter but different floor can be created."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create first apartment
+    create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create another apartment with same letter but different floor (should succeed)
+    response = client.post(
+        "/api/v1/apartments",
+        json={
+            "floor": 2,
+            "letter": "A",
+            "is_mine": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["floor"] == 2
+    assert data["letter"] == "A"
+
+
 # ============================================================================
 # GET ALL APARTMENTS TESTS
 # ============================================================================
@@ -429,3 +496,120 @@ def test_update_apartment_without_authentication(client, db: Session):
         },
     )
     assert response.status_code == 401
+
+
+def test_update_apartment_duplicate_floor_letter(client, db: Session, admin_token: str):
+    """Test updating apartment to duplicate floor and letter fails."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create two apartments
+    apartment1 = create_apartment(db, floor=1, letter="A", is_mine=True)
+    apartment2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    
+    # Try to update apartment2 to have same floor and letter as apartment1
+    response = client.put(
+        f"/api/v1/apartments/{apartment2.id}",
+        json={
+            "floor": 1,
+            "letter": "A",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 409  # Conflict
+    assert "already exists" in response.json()["detail"].lower()
+
+
+def test_update_apartment_duplicate_floor_only(client, db: Session, admin_token: str):
+    """Test updating apartment to duplicate floor (but different letter) succeeds."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create two apartments
+    apartment1 = create_apartment(db, floor=1, letter="A", is_mine=True)
+    apartment2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    
+    # Update apartment2 to have same floor as apartment1 but keep its own letter
+    # This should succeed since (1, B) is different from (1, A)
+    response = client.put(
+        f"/api/v1/apartments/{apartment2.id}",
+        json={
+            "floor": 1,
+            # letter stays "B", so final combination is (1, B) which is different from (1, A)
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["floor"] == 1
+    assert data["letter"] == "B"
+
+
+def test_update_apartment_duplicate_letter_only(client, db: Session, admin_token: str):
+    """Test updating apartment to duplicate letter (but different floor) succeeds."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create two apartments
+    apartment1 = create_apartment(db, floor=1, letter="A", is_mine=True)
+    apartment2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    
+    # Try to update apartment2 to have same letter as apartment1 but different floor
+    response = client.put(
+        f"/api/v1/apartments/{apartment2.id}",
+        json={
+            "letter": "A",
+            # floor stays 2, so final is (2, A) which is different from (1, A)
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # This should succeed since (2, A) is different from (1, A)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["floor"] == 2
+    assert data["letter"] == "A"
+
+
+def test_update_apartment_same_floor_letter_no_change(client, db: Session, admin_token: str):
+    """Test updating apartment without changing floor and letter succeeds."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Update other fields without changing floor and letter
+    response = client.put(
+        f"/api/v1/apartments/{apartment.id}",
+        json={
+            "is_mine": False,
+            "ecogas": 12345,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["floor"] == 1
+    assert data["letter"] == "A"
+    assert data["is_mine"] is False
+    assert data["ecogas"] == 12345
+
+
+def test_update_apartment_to_same_floor_letter(client, db: Session, admin_token: str):
+    """Test updating apartment to explicitly set same floor and letter it already has succeeds."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Update to same floor and letter (should succeed - no conflict with itself)
+    response = client.put(
+        f"/api/v1/apartments/{apartment.id}",
+        json={
+            "floor": 1,
+            "letter": "A",
+            "is_mine": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["floor"] == 1
+    assert data["letter"] == "A"
+    assert data["is_mine"] is False

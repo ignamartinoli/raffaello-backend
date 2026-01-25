@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.db.models.apartment import Apartment as ApartmentModel
+from app.errors import DuplicateResourceError
 
 
 def get_apartment_by_id(db: Session, apartment_id: int) -> ApartmentModel | None:
@@ -11,6 +12,19 @@ def get_apartment_by_id(db: Session, apartment_id: int) -> ApartmentModel | None
 def get_all_apartments(db: Session) -> list[ApartmentModel]:
     """Get all apartments."""
     return db.query(ApartmentModel).all()
+
+
+def get_apartment_by_floor_letter(
+    db: Session, floor: int, letter: str, exclude_id: int | None = None
+) -> ApartmentModel | None:
+    """Get an apartment by floor and letter combination."""
+    query = db.query(ApartmentModel).filter(
+        ApartmentModel.floor == floor,
+        ApartmentModel.letter == letter
+    )
+    if exclude_id is not None:
+        query = query.filter(ApartmentModel.id != exclude_id)
+    return query.first()
 
 
 def create_apartment(
@@ -24,6 +38,11 @@ def create_apartment(
     water: int | None = None,
 ) -> ApartmentModel:
     """Create a new apartment in the database. Pure data access - no business logic."""
+    # Check for uniqueness of floor and letter combination
+    existing = get_apartment_by_floor_letter(db, floor, letter)
+    if existing:
+        raise DuplicateResourceError(f"An apartment with floor {floor} and letter {letter} already exists")
+    
     db_apartment = ApartmentModel(
         floor=floor,
         letter=letter,
@@ -54,6 +73,16 @@ def update_apartment(
     apartment = get_apartment_by_id(db, apartment_id)
     if not apartment:
         raise ValueError("Apartment not found")
+    
+    # Determine the final floor and letter values after update
+    final_floor = floor if floor is not None else apartment.floor
+    final_letter = letter if letter is not None else apartment.letter
+    
+    # Check for uniqueness if floor or letter is being changed
+    if floor is not None or letter is not None:
+        existing = get_apartment_by_floor_letter(db, final_floor, final_letter, exclude_id=apartment_id)
+        if existing:
+            raise DuplicateResourceError(f"An apartment with floor {final_floor} and letter {final_letter} already exists")
     
     if floor is not None:
         apartment.floor = floor
