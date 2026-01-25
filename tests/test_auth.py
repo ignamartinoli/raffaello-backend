@@ -136,7 +136,7 @@ def test_create_user_email_already_exists(client, db: Session, admin_token: str,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert "Email already registered" in response.json()["detail"]
 
 
@@ -227,7 +227,7 @@ def test_create_user_invalid_role_id(client, db: Session, admin_token: str):
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
 

@@ -277,7 +277,7 @@ def test_create_contract_user_not_found(client, db: Session, admin_token: str, a
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
@@ -309,7 +309,7 @@ def test_create_contract_apartment_not_found(client, db: Session, admin_token: s
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
@@ -339,7 +339,7 @@ def test_create_contract_duplicate(client, db: Session, admin_token: str, tenant
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response2.status_code == 400
+    assert response2.status_code == 409
     assert "already exists" in response2.json()["detail"].lower() or "duplicate" in response2.json()["detail"].lower()
 
 
@@ -369,7 +369,7 @@ def test_create_contract_duplicate_different_user_same_apartment(client, db: Ses
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response2.status_code == 400
+    assert response2.status_code == 409
     assert "already exists" in response2.json()["detail"].lower() or "duplicate" in response2.json()["detail"].lower()
 
 
@@ -653,7 +653,7 @@ def test_update_contract_not_found(client, db: Session, admin_token: str):
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
@@ -804,7 +804,7 @@ def test_update_contract_duplicate(client, db: Session, admin_token: str, tenant
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert "already exists" in response.json()["detail"].lower() or "duplicate" in response.json()["detail"].lower()
 
 

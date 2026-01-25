@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import app.repositories.charge as charge_repo
 import app.repositories.contract as contract_repo
 from app.db.models.charge import Charge as ChargeModel
+from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
 
 
 def create_charge(
@@ -33,14 +34,14 @@ def create_charge(
     # Validate contract exists
     contract = contract_repo.get_contract_by_id(db, contract_id)
     if not contract:
-        raise ValueError(f"Contract with id {contract_id} not found")
+        raise NotFoundError(f"Contract with id {contract_id} not found")
     
     # Check for duplicate charge (same contract_id and period)
     existing_charge = charge_repo.get_charge_by_contract_and_period(
         db, contract_id, period
     )
     if existing_charge:
-        raise ValueError(
+        raise DuplicateResourceError(
             f"Charge already exists for contract {contract_id} with period {period.strftime('%Y-%m-%d')}"
         )
     
@@ -78,7 +79,7 @@ def update_charge(
     # Get existing charge
     existing_charge = charge_repo.get_charge_by_id(db, charge_id)
     if not existing_charge:
-        raise ValueError("Charge not found")
+        raise NotFoundError("Charge not found")
     
     # Extract fields from update_fields
     contract_id = update_fields.get("contract_id")
@@ -91,7 +92,7 @@ def update_charge(
     if month is not None or year is not None:
         # If month or year is provided, we need both
         if month is None or year is None:
-            raise ValueError("Both month and year must be provided together")
+            raise DomainValidationError("Both month and year must be provided together")
         
         # Convert month/year to first of month date
         new_period = date(year, month, 1)
@@ -100,7 +101,7 @@ def update_charge(
     if contract_id is not None:
         contract = contract_repo.get_contract_by_id(db, contract_id)
         if not contract:
-            raise ValueError(f"Contract with id {contract_id} not found")
+            raise NotFoundError(f"Contract with id {contract_id} not found")
     
     # Check for duplicate charge if period or contract_id is being changed
     final_contract_id = contract_id if contract_id is not None else existing_charge.contract_id
@@ -113,7 +114,7 @@ def update_charge(
         )
         # If duplicate exists and it's not the current charge, raise error
         if duplicate_charge and duplicate_charge.id != charge_id:
-            raise ValueError(
+            raise DuplicateResourceError(
                 f"Charge already exists for contract {final_contract_id} with period {final_period.strftime('%Y-%m-%d')}"
             )
     

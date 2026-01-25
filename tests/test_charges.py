@@ -318,7 +318,7 @@ def test_create_charge_contract_not_found(client, db: Session, admin_token: str)
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
@@ -358,7 +358,7 @@ def test_create_charge_duplicate(client, db: Session, admin_token: str, contract
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response2.status_code == 400
+    assert response2.status_code == 409
     assert "already exists" in response2.json()["detail"].lower() or "duplicate" in response2.json()["detail"].lower()
 
 
@@ -1117,7 +1117,7 @@ def test_update_charge_duplicate_period_fails(client, db: Session, admin_token: 
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert "already exists" in response.json()["detail"].lower()
 
 
@@ -1196,7 +1196,7 @@ def test_update_charge_not_found(client, db: Session, admin_token: str):
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 

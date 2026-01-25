@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
@@ -16,16 +16,8 @@ def create_new_user(
 ):
     """
     Create a new user. Only admin users can create users.
-    
+
     If role_id is not provided, the user will be assigned the "tenant" role by default.
     """
-    try:
-        user = create_user(db, user_data)
-    except ValueError as e:
-        # Handle validation errors from service (e.g., invalid role_id, email exists, password validation)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    
+    user = create_user(db, user_data)
     return User.model_validate(user)

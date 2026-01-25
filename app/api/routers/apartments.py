@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
 import app.repositories.apartment as apartment_repo
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
-from app.errors import DuplicateResourceError
+from app.errors import NotFoundError
 
 router = APIRouter(prefix="/apartments", tags=["apartments"])
 
@@ -18,23 +18,16 @@ def create_new_apartment(
     """
     Create a new apartment. Only admin users can create apartments.
     """
-    try:
-        apartment = apartment_repo.create_apartment(
-            db,
-            floor=apartment_data.floor,
-            letter=apartment_data.letter,
-            is_mine=apartment_data.is_mine,
-            ecogas=apartment_data.ecogas,
-            epec_client=apartment_data.epec_client,
-            epec_contract=apartment_data.epec_contract,
-            water=apartment_data.water,
-        )
-    except DuplicateResourceError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
-    
+    apartment = apartment_repo.create_apartment(
+        db,
+        floor=apartment_data.floor,
+        letter=apartment_data.letter,
+        is_mine=apartment_data.is_mine,
+        ecogas=apartment_data.ecogas,
+        epec_client=apartment_data.epec_client,
+        epec_contract=apartment_data.epec_contract,
+        water=apartment_data.water,
+    )
     return Apartment.model_validate(apartment)
 
 
@@ -61,10 +54,7 @@ def get_apartment_by_id(
     """
     apartment = apartment_repo.get_apartment_by_id(db, apartment_id)
     if not apartment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apartment not found",
-        )
+        raise NotFoundError("Apartment not found")
     return Apartment.model_validate(apartment)
 
 
@@ -78,28 +68,15 @@ def update_apartment_by_id(
     """
     Update an apartment. Only admin users can update apartments.
     """
-    try:
-        apartment = apartment_repo.update_apartment(
-            db,
-            apartment_id=apartment_id,
-            floor=apartment_data.floor,
-            letter=apartment_data.letter,
-            is_mine=apartment_data.is_mine,
-            ecogas=apartment_data.ecogas,
-            epec_client=apartment_data.epec_client,
-            epec_contract=apartment_data.epec_contract,
-            water=apartment_data.water,
-        )
-    except DuplicateResourceError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
-    except ValueError as e:
-        # ValueError is used for "not found" cases
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
-    
+    apartment = apartment_repo.update_apartment(
+        db,
+        apartment_id=apartment_id,
+        floor=apartment_data.floor,
+        letter=apartment_data.letter,
+        is_mine=apartment_data.is_mine,
+        ecogas=apartment_data.ecogas,
+        epec_client=apartment_data.epec_client,
+        epec_contract=apartment_data.epec_contract,
+        water=apartment_data.water,
+    )
     return Apartment.model_validate(apartment)
