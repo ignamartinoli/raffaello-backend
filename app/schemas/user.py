@@ -9,7 +9,6 @@ class User(BaseModel):
     id: int
     email: str
     name: str
-    role_id: int
     role: Role
 
 
