@@ -11,4 +11,4 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 @router.get("", response_model=list[Role])
 def get_roles(db: Session = Depends(get_db)):
     roles = role_repo.get_all_roles(db)
-    return roles
+    return [Role.model_validate(role) for role in roles]
