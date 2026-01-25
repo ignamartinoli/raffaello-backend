@@ -4,6 +4,7 @@ from sqlalchemy import and_
 
 from app.db.models.charge import Charge as ChargeModel
 from app.db.models.contract import Contract as ContractModel
+from app.errors import NotFoundError
 
 
 def get_charge_by_id(db: Session, charge_id: int) -> ChargeModel | None:
@@ -91,7 +92,7 @@ def update_charge(
     """
     charge = get_charge_by_id(db, charge_id)
     if not charge:
-        raise ValueError("Charge not found")
+        raise NotFoundError("Charge not found")
     
     # Update only the fields that were explicitly provided
     if "contract_id" in kwargs:

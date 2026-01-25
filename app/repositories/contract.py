@@ -2,6 +2,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.db.models.contract import Contract as ContractModel
+from app.errors import NotFoundError
 
 
 def get_contract_by_id(db: Session, contract_id: int) -> ContractModel | None:
@@ -54,7 +55,7 @@ def update_contract(
     """
     contract = get_contract_by_id(db, contract_id)
     if not contract:
-        raise ValueError("Contract not found")
+        raise NotFoundError("Contract not found")
     
     # Update only the fields that were explicitly provided
     if "user_id" in kwargs:

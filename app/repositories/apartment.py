@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.db.models.apartment import Apartment as ApartmentModel
-from app.errors import DuplicateResourceError
+from app.errors import DuplicateResourceError, NotFoundError
 
 
 def get_apartment_by_id(db: Session, apartment_id: int) -> ApartmentModel | None:
@@ -72,7 +72,7 @@ def update_apartment(
     """Update an apartment."""
     apartment = get_apartment_by_id(db, apartment_id)
     if not apartment:
-        raise ValueError("Apartment not found")
+        raise NotFoundError("Apartment not found")
     
     # Determine the final floor and letter values after update
     final_floor = floor if floor is not None else apartment.floor

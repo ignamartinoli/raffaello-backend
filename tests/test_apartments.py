@@ -194,7 +194,9 @@ def test_create_apartment_duplicate_floor_letter(client, db: Session, admin_toke
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 409  # Conflict
-    assert "already exists" in response.json()["detail"].lower()
+    data = response.json()
+    assert "already exists" in data["detail"].lower()
+    assert data["code"] == "DUPLICATE_RESOURCE"
 
 
 def test_create_apartment_same_floor_different_letter(client, db: Session, admin_token: str):
@@ -360,7 +362,9 @@ def test_get_apartment_by_id_not_found(client, db: Session, admin_token: str):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 404
-    assert "Apartment not found" in response.json()["detail"]
+    data = response.json()
+    assert "Apartment not found" in data["detail"]
+    assert data["code"] == "NOT_FOUND"
 
 
 def test_get_apartment_by_id_as_tenant_fails(client, db: Session, tenant_token: str):
@@ -450,7 +454,9 @@ def test_update_apartment_not_found(client, db: Session, admin_token: str):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 404
-    assert "Apartment not found" in response.json()["detail"]
+    data = response.json()
+    assert "Apartment not found" in data["detail"]
+    assert data["code"] == "NOT_FOUND"
 
 
 def test_update_apartment_as_accountant_fails(client, db: Session, accountant_token: str):
@@ -516,7 +522,9 @@ def test_update_apartment_duplicate_floor_letter(client, db: Session, admin_toke
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 409  # Conflict
-    assert "already exists" in response.json()["detail"].lower()
+    data = response.json()
+    assert "already exists" in data["detail"].lower()
+    assert data["code"] == "DUPLICATE_RESOURCE"
 
 
 def test_update_apartment_duplicate_floor_only(client, db: Session, admin_token: str):
