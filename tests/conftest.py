@@ -177,3 +177,44 @@ def tenant_token(tenant_user_dict: dict) -> str:
     """Get JWT token for tenant user."""
     token = create_access_token(data={"sub": tenant_user_dict["id"]})
     return token
+
+
+@pytest.fixture(scope="function")
+def accountant_user_dict(db: Session) -> dict:
+    """Create an accountant user for testing."""
+    from app.core.security import get_password_hash
+
+    email = "accountant@example.com"
+    name = "Test Accountant"
+    password = "AccountantPass123!"
+
+    # Get accountant role
+    accountant_role = db.query(RoleModel).filter(RoleModel.name == "accountant").first()
+    if not accountant_role:
+        raise RuntimeError("Accountant role not found")
+
+    # Create user
+    user = UserModel(
+        email=email,
+        name=name,
+        password_hash=get_password_hash(password),
+        role_id=accountant_role.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": name,
+        "password": password,
+        "role_id": user.role_id,
+    }
+
+
+@pytest.fixture(scope="function")
+def accountant_token(accountant_user_dict: dict) -> str:
+    """Get JWT token for accountant user."""
+    token = create_access_token(data={"sub": accountant_user_dict["id"]})
+    return token
