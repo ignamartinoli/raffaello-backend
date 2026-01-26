@@ -29,13 +29,16 @@ def create_new_user(
 def get_all_users_paginated(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
+    name: str | None = Query(None, description="Filter users by name (partial match)"),
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(require_roles("admin")),
 ):
     """
     Get all users with pagination. Only admin users can access this endpoint.
+
+    Optional name filter: filters users by name (case-insensitive partial match).
     """
-    users, total = get_all_users(db, page=page, page_size=page_size)
+    users, total = get_all_users(db, page=page, page_size=page_size, name=name)
     return PaginatedResponse(
         items=[User.model_validate(user) for user in users],
         total=total,
