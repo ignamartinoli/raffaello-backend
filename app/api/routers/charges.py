@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles, get_current_user
@@ -41,22 +41,41 @@ def create_new_charge(
 def get_all_charges(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    year: int | None = Query(
+        None, ge=1900, le=2100, description="Year to filter by (1900-2100)"
+    ),
+    month: int | None = Query(
+        None, ge=1, le=12, description="Month to filter by (1-12)"
+    ),
 ):
     """
     Get all charges.
     - Admin and Accountant: can see all charges
     - Tenant: can only see visible charges for contracts with their user_id
+
+    Optional query parameters:
+    - year: Filter charges by year (must be provided with month)
+    - month: Filter charges by month (must be provided with year)
     """
+    # Validate that both year and month are provided together if one is provided
+    if (year is None) != (month is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both year and month must be provided together, or neither",
+        )
+
     if current_user.role.name in ("admin", "accountant"):
-        charges = charge_repo.get_all_charges(db)
+        charges = charge_repo.get_all_charges(db, year=year, month=month)
     elif current_user.role.name == "tenant":
-        charges = charge_repo.get_visible_charges_by_user_id(db, current_user.id)
+        charges = charge_repo.get_visible_charges_by_user_id(
+            db, current_user.id, year=year, month=month
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
-    
+
     return [Charge.model_validate(charge) for charge in charges]
 
 
@@ -74,7 +93,7 @@ def get_charge_by_id(
     charge = charge_repo.get_charge_by_id(db, charge_id)
     if not charge:
         raise NotFoundError("Charge not found")
-    
+
     # Check access: tenant can only see visible charges for their contracts
     if current_user.role.name == "tenant":
         if not charge.is_visible or charge.contract.user_id != current_user.id:
@@ -82,7 +101,7 @@ def get_charge_by_id(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions",
             )
-    
+
     return Charge.model_validate(charge)
 
 
@@ -95,7 +114,7 @@ def update_charge_by_id(
 ):
     """
     Update a charge. Only admin users can update charges.
-    
+
     Fields not included in the request are not updated.
     To clear a field (set to null), explicitly include it with null value.
     """

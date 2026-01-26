@@ -679,6 +679,295 @@ def test_get_all_charges_as_tenant_no_access_other_contracts(client, db: Session
     assert not any(charge["id"] == create_response.json()["id"] for charge in data)
 
 
+def test_get_all_charges_filter_by_period_success(client, db: Session, admin_token: str, contract):
+    """Test filtering charges by year and month."""
+    # Create charges for different periods
+    charge1_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 3,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge1_response.status_code == 201
+    charge1_id = charge1_response.json()["id"]
+    
+    charge2_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 4,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge2_response.status_code == 201
+    charge2_id = charge2_response.json()["id"]
+    
+    # Filter by March 2025
+    response = client.get(
+        "/api/v1/charges?year=2025&month=3",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should only return charge for March 2025
+    assert len(data) == 1
+    assert data[0]["id"] == charge1_id
+    assert data[0]["period"] == "2025-03-01"
+
+
+def test_get_all_charges_filter_by_period_no_matches(client, db: Session, admin_token: str, contract):
+    """Test filtering charges by period with no matches returns empty list."""
+    # Create a charge for March 2025
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 3,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by a different period
+    response = client.get(
+        "/api/v1/charges?year=2026&month=1",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+
+
+def test_get_all_charges_filter_by_period_only_year_fails(client, db: Session, admin_token: str):
+    """Test filtering with only year parameter fails validation."""
+    response = client.get(
+        "/api/v1/charges?year=2025",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "Both year and month must be provided together" in response.json()["detail"]
+
+
+def test_get_all_charges_filter_by_period_only_month_fails(client, db: Session, admin_token: str):
+    """Test filtering with only month parameter fails validation."""
+    response = client.get(
+        "/api/v1/charges?month=3",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "Both year and month must be provided together" in response.json()["detail"]
+
+
+def test_get_all_charges_filter_by_period_invalid_month_zero(client, db: Session, admin_token: str):
+    """Test filtering with month=0 fails validation."""
+    response = client.get(
+        "/api/v1/charges?year=2025&month=0",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_get_all_charges_filter_by_period_invalid_month_13(client, db: Session, admin_token: str):
+    """Test filtering with month=13 fails validation."""
+    response = client.get(
+        "/api/v1/charges?year=2025&month=13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_get_all_charges_filter_by_period_invalid_year_too_low(client, db: Session, admin_token: str):
+    """Test filtering with year < 1900 fails validation."""
+    response = client.get(
+        "/api/v1/charges?year=1899&month=1",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_get_all_charges_filter_by_period_invalid_year_too_high(client, db: Session, admin_token: str):
+    """Test filtering with year > 2100 fails validation."""
+    response = client.get(
+        "/api/v1/charges?year=2101&month=1",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_get_all_charges_filter_by_period_as_accountant(client, db: Session, admin_token: str, accountant_token: str, contract):
+    """Test accountant can filter charges by period."""
+    # Create charges for different periods
+    charge1_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 5,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge1_response.status_code == 201
+    charge1_id = charge1_response.json()["id"]
+    
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 6,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by period as accountant
+    response = client.get(
+        "/api/v1/charges?year=2025&month=5",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == charge1_id
+
+
+def test_get_all_charges_filter_by_period_as_tenant(client, db: Session, admin_token: str, tenant_token: str, contract):
+    """Test tenant can filter visible charges by period."""
+    # Create visible charges for different periods
+    visible_charge1 = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 7,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert visible_charge1.status_code == 201
+    charge1_id = visible_charge1.json()["id"]
+    
+    # Create another visible charge for different period
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 8,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by period as tenant
+    response = client.get(
+        "/api/v1/charges?year=2025&month=7",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == charge1_id
+    assert data[0]["is_visible"] is True
+
+
+def test_get_all_charges_filter_by_period_tenant_hidden_charge_not_included(client, db: Session, admin_token: str, tenant_token: str, contract):
+    """Test tenant filtering by period excludes hidden charges."""
+    # Create visible charge
+    visible_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 9,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert visible_charge.status_code == 201
+    visible_charge_id = visible_charge.json()["id"]
+    
+    # Create hidden charge for same period
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 9,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by period as tenant - should only see visible charge
+    response = client.get(
+        "/api/v1/charges?year=2025&month=9",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == visible_charge_id
+    assert data[0]["is_visible"] is True
+
+
 # ============================================================================
 # GET CHARGE BY ID TESTS
 # ============================================================================

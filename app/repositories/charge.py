@@ -1,6 +1,6 @@
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, extract
 
 from app.db.models.charge import Charge as ChargeModel
 from app.db.models.contract import Contract as ContractModel
@@ -9,12 +9,29 @@ from app.errors import NotFoundError
 
 def get_charge_by_id(db: Session, charge_id: int) -> ChargeModel | None:
     """Get a charge by ID with contract relationship loaded."""
-    return db.query(ChargeModel).options(joinedload(ChargeModel.contract)).filter(ChargeModel.id == charge_id).first()
+    return (
+        db.query(ChargeModel)
+        .options(joinedload(ChargeModel.contract))
+        .filter(ChargeModel.id == charge_id)
+        .first()
+    )
 
 
-def get_all_charges(db: Session) -> list[ChargeModel]:
-    """Get all charges."""
-    return db.query(ChargeModel).all()
+def get_all_charges(
+    db: Session, year: int | None = None, month: int | None = None
+) -> list[ChargeModel]:
+    """Get all charges, optionally filtered by year and month."""
+    query = db.query(ChargeModel)
+
+    if year is not None and month is not None:
+        query = query.filter(
+            and_(
+                extract("year", ChargeModel.period) == year,
+                extract("month", ChargeModel.period) == month,
+            )
+        )
+
+    return query.all()
 
 
 def get_charges_by_contract_id(db: Session, contract_id: int) -> list[ChargeModel]:
@@ -22,17 +39,29 @@ def get_charges_by_contract_id(db: Session, contract_id: int) -> list[ChargeMode
     return db.query(ChargeModel).filter(ChargeModel.contract_id == contract_id).all()
 
 
-def get_visible_charges_by_user_id(db: Session, user_id: int) -> list[ChargeModel]:
+def get_visible_charges_by_user_id(
+    db: Session, user_id: int, year: int | None = None, month: int | None = None
+) -> list[ChargeModel]:
     """
     Get all visible charges for contracts belonging to a specific user.
     Used for tenant access - tenants can only see charges that are visible and belong to their contracts.
+    Optionally filtered by year and month.
     """
-    return db.query(ChargeModel).join(ContractModel).filter(
-        and_(
-            ContractModel.user_id == user_id,
-            ChargeModel.is_visible == True
+    query = (
+        db.query(ChargeModel)
+        .join(ContractModel)
+        .filter(and_(ContractModel.user_id == user_id, ChargeModel.is_visible == True))
+    )
+
+    if year is not None and month is not None:
+        query = query.filter(
+            and_(
+                extract("year", ChargeModel.period) == year,
+                extract("month", ChargeModel.period) == month,
+            )
         )
-    ).all()
+
+    return query.all()
 
 
 def get_charge_by_contract_and_period(
@@ -41,10 +70,14 @@ def get_charge_by_contract_and_period(
     period: date,
 ) -> ChargeModel | None:
     """Get a charge by contract_id and period. Used to check for duplicates."""
-    return db.query(ChargeModel).filter(
-        ChargeModel.contract_id == contract_id,
-        ChargeModel.period == period,
-    ).first()
+    return (
+        db.query(ChargeModel)
+        .filter(
+            ChargeModel.contract_id == contract_id,
+            ChargeModel.period == period,
+        )
+        .first()
+    )
 
 
 def create_charge(
@@ -86,14 +119,14 @@ def update_charge(
 ) -> ChargeModel:
     """
     Update a charge. Only updates fields that are explicitly provided.
-    
+
     To clear a field (set to None), explicitly pass it with None value.
     Fields not provided are not updated.
     """
     charge = get_charge_by_id(db, charge_id)
     if not charge:
         raise NotFoundError("Charge not found")
-    
+
     # Update only the fields that were explicitly provided
     if "contract_id" in kwargs:
         charge.contract_id = kwargs["contract_id"]
@@ -115,7 +148,7 @@ def update_charge(
         charge.is_visible = kwargs["is_visible"]
     if "payment_date" in kwargs:
         charge.payment_date = kwargs["payment_date"]  # Can be None to clear
-    
+
     db.commit()
     db.refresh(charge)
     return charge
