@@ -19,6 +19,12 @@ class UserCreate(BaseModel):
     role_id: int | None = None  # If not provided, defaults to "tenant"
 
 
+class UserUpdate(BaseModel):
+    email: EmailStr | None = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    role_id: int | None = None
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 
