@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_roles
+from app.api.deps import get_db, require_roles, get_current_user
+from app.db.models.user import User
 import app.repositories.apartment as apartment_repo
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 from app.errors import NotFoundError
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/apartments", tags=["apartments"])
 def create_new_apartment(
     apartment_data: ApartmentCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_roles("admin")),
+    current_user=Depends(require_roles("admin")),
 ):
     """
     Create a new apartment. Only admin users can create apartments.
@@ -34,12 +35,25 @@ def create_new_apartment(
 @router.get("", response_model=list[Apartment])
 def get_all_apartments(
     db: Session = Depends(get_db),
-    current_user = Depends(require_roles("admin", "accountant")),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Get all apartments. Both admin and accountant users can see all apartments.
+    Get all apartments.
+    - Admin and Accountant: can see all apartments
+    - Tenant: can only see apartments for which they have an open contract
+      (contract where end_date is None or end_date >= today)
     """
-    apartments = apartment_repo.get_all_apartments(db)
+    if current_user.role.name in ("admin", "accountant"):
+        apartments = apartment_repo.get_all_apartments(db)
+    elif current_user.role.name == "tenant":
+        apartments = apartment_repo.get_apartments_with_open_contracts_by_user_id(
+            db, current_user.id
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
     return [Apartment.model_validate(apt) for apt in apartments]
 
 
@@ -47,7 +61,7 @@ def get_all_apartments(
 def get_apartment_by_id(
     apartment_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_roles("admin", "accountant")),
+    current_user=Depends(require_roles("admin", "accountant")),
 ):
     """
     Get an apartment by ID. Both admin and accountant users can see apartments.
@@ -63,7 +77,7 @@ def update_apartment_by_id(
     apartment_id: int,
     apartment_data: ApartmentUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_roles("admin")),
+    current_user=Depends(require_roles("admin")),
 ):
     """
     Update an apartment. Only admin users can update apartments.

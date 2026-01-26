@@ -50,6 +50,38 @@ def accountant_token(accountant_user_dict: dict) -> str:
     return token
 
 
+@pytest.fixture(scope="function")
+def another_tenant_user_dict(db: Session) -> dict:
+    """Create another tenant user for testing."""
+    email = "tenant2@example.com"
+    name = "Test Tenant 2"
+    password = "Tenant2Pass123!"
+    
+    # Get tenant role
+    tenant_role = db.query(RoleModel).filter(RoleModel.name == "tenant").first()
+    if not tenant_role:
+        raise RuntimeError("Tenant role not found")
+    
+    # Create user
+    user = UserModel(
+        email=email,
+        name=name,
+        password_hash=get_password_hash(password),
+        role_id=tenant_role.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": name,
+        "password": password,
+        "role_id": user.role_id,
+    }
+
+
 # ============================================================================
 # CREATE APARTMENT TESTS
 # ============================================================================
@@ -298,14 +330,381 @@ def test_get_all_apartments_empty_list(client, db: Session, admin_token: str):
     assert data == []
 
 
-def test_get_all_apartments_as_tenant_fails(client, db: Session, tenant_token: str):
-    """Test tenant cannot get all apartments."""
+def test_get_all_apartments_as_tenant_with_open_contract(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can get apartments with open contracts (end_date is None)."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create open contract (end_date is None)
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        month=1,
+        year=2025,
+        end_date=None,
+    )
+    
     response = client.get(
         "/api/v1/apartments",
         headers={"Authorization": f"Bearer {tenant_token}"},
     )
-    assert response.status_code == 403
-    assert "Not enough permissions" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment.id
+    assert data[0]["floor"] == 1
+    assert data[0]["letter"] == "A"
+
+
+def test_get_all_apartments_as_tenant_with_future_end_date(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can get apartments with open contracts (end_date in the future)."""
+    from datetime import date, timedelta
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=2, letter="B", is_mine=False)
+    
+    # Create open contract (end_date in the future)
+    future_date = date.today() + timedelta(days=30)
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        month=1,
+        year=2025,
+        end_date=future_date,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment.id
+    assert data[0]["floor"] == 2
+    assert data[0]["letter"] == "B"
+
+
+def test_get_all_apartments_as_tenant_with_end_date_today(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can get apartments with contracts ending today (end_date == today is considered open)."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=5, letter="E", is_mine=True)
+    
+    # Create contract with end_date equal to today (should be considered open)
+    today = date.today()
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        month=1,
+        year=2025,
+        end_date=today,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment.id
+    assert data[0]["floor"] == 5
+    assert data[0]["letter"] == "E"
+
+
+def test_get_all_apartments_as_tenant_excludes_closed_contracts(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant cannot see apartments with closed contracts (end_date in the past)."""
+    from datetime import date, timedelta
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=3, letter="C", is_mine=True)
+    
+    # Create closed contract (end_date in the past)
+    past_date = date.today() - timedelta(days=1)
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        month=1,
+        year=2024,
+        end_date=past_date,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0  # Should not see apartment with closed contract
+
+
+def test_get_all_apartments_as_tenant_excludes_future_contracts(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant cannot see apartments with contracts that haven't started yet (start_date in the future)."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.repositories.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=6, letter="F", is_mine=False)
+    
+    # Create contract with start_date in the future (must be first of month)
+    # Get next month's first day
+    today = date.today()
+    if today.month == 12:
+        future_start = date(today.year + 1, 1, 1)
+    else:
+        future_start = date(today.year, today.month + 1, 1)
+    
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_date=future_start,
+        end_date=None,  # No end date, but contract hasn't started
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0  # Should not see apartment with future contract
+
+
+def test_get_all_apartments_as_tenant_excludes_future_contracts_with_end_date(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant cannot see apartments with future contracts even if end_date is in the future."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.repositories.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=7, letter="G", is_mine=True)
+    
+    # Create contract with start_date in the future and end_date also in future (both must be first of month)
+    # Get next month's first day
+    today = date.today()
+    if today.month == 12:
+        future_start = date(today.year + 1, 1, 1)
+        future_end = date(today.year + 1, 2, 1)
+    else:
+        future_start = date(today.year, today.month + 1, 1)
+        if today.month == 11:
+            future_end = date(today.year + 1, 1, 1)
+        else:
+            future_end = date(today.year, today.month + 2, 1)
+    
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_date=future_start,
+        end_date=future_end,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0  # Should not see apartment with future contract
+
+
+def test_get_all_apartments_as_tenant_includes_contract_starting_today(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can see apartments with contracts starting today (if today is first of month) or this month."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.repositories.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=8, letter="H", is_mine=False)
+    
+    # Create contract with start_date equal to this month's first day (must be first of month)
+    today = date.today()
+    start_date = date(today.year, today.month, 1)
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_date=start_date,
+        end_date=None,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment.id
+    assert data[0]["floor"] == 8
+    assert data[0]["letter"] == "H"
+
+
+def test_get_all_apartments_as_tenant_includes_contract_started_in_past(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can see apartments with contracts that started in the past."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.repositories.contract import create_contract
+    
+    # Create apartment
+    apartment = create_apartment(db, floor=9, letter="I", is_mine=True)
+    
+    # Create contract with start_date in the past (must be first of month)
+    today = date.today()
+    if today.month == 1:
+        past_start = date(today.year - 1, 12, 1)
+    else:
+        past_start = date(today.year, today.month - 1, 1)
+    
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_date=past_start,
+        end_date=None,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment.id
+    assert data[0]["floor"] == 9
+    assert data[0]["letter"] == "I"
+
+
+def test_get_all_apartments_as_tenant_excludes_no_contracts(client, db: Session, tenant_token: str):
+    """Test tenant cannot see apartments without contracts."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create apartment without contract
+    create_apartment(db, floor=4, letter="D", is_mine=False)
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0  # Should not see apartment without contract
+
+
+def test_get_all_apartments_as_tenant_only_own_apartments(client, db: Session, tenant_token: str, tenant_user_dict: dict, another_tenant_user_dict: dict):
+    """Test tenant only sees their own apartments, not other tenants' apartments."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create two apartments
+    apartment1 = create_apartment(db, floor=1, letter="A", is_mine=True)
+    apartment2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    
+    # Create open contract for tenant_user_dict with apartment1
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment1.id,
+        month=1,
+        year=2025,
+    )
+    
+    # Create open contract for another_tenant_user_dict with apartment2
+    create_contract(
+        db,
+        user_id=another_tenant_user_dict["id"],
+        apartment_id=apartment2.id,
+        month=1,
+        year=2025,
+    )
+    
+    # Tenant should only see apartment1 (their own)
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == apartment1.id
+    assert data[0]["floor"] == 1
+    assert data[0]["letter"] == "A"
+
+
+def test_get_all_apartments_as_tenant_empty_list_no_contracts(client, db: Session, tenant_token: str):
+    """Test tenant sees empty list when they have no open contracts."""
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data == []
+
+
+def test_get_all_apartments_as_tenant_multiple_open_contracts(client, db: Session, tenant_token: str, tenant_user_dict: dict):
+    """Test tenant can see multiple apartments with open contracts."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create multiple apartments
+    apartment1 = create_apartment(db, floor=1, letter="A", is_mine=True)
+    apartment2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    apartment3 = create_apartment(db, floor=3, letter="C", is_mine=True)
+    
+    # Create open contracts for all three apartments
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment1.id,
+        month=1,
+        year=2025,
+    )
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment2.id,
+        month=2,
+        year=2025,
+    )
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment3.id,
+        month=3,
+        year=2025,
+    )
+    
+    response = client.get(
+        "/api/v1/apartments",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 3
+    apartment_ids = {apt["id"] for apt in data}
+    assert apartment1.id in apartment_ids
+    assert apartment2.id in apartment_ids
+    assert apartment3.id in apartment_ids
 
 
 def test_get_all_apartments_without_authentication(client, db: Session):
