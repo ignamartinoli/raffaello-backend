@@ -66,8 +66,8 @@ def contract(db: Session, tenant_user_dict: dict, apartment):
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=1,
-        year=2025,
+        start_month=1,
+        start_year=2025,
     )
 
 
@@ -118,8 +118,8 @@ def another_contract(db: Session, another_tenant_user_dict: dict, apartment):
         db,
         user_id=another_tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=2,
-        year=2025,
+        start_month=2,
+        start_year=2025,
     )
 
 

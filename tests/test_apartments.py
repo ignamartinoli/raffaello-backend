@@ -343,9 +343,8 @@ def test_get_all_apartments_as_tenant_with_open_contract(client, db: Session, te
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=1,
-        year=2025,
-        end_date=None,
+        start_month=1,
+        start_year=2025,
     )
     
     response = client.get(
@@ -375,9 +374,10 @@ def test_get_all_apartments_as_tenant_with_future_end_date(client, db: Session, 
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=1,
-        year=2025,
-        end_date=future_date,
+        start_month=1,
+        start_year=2025,
+        end_month=future_date.month,
+        end_year=future_date.year,
     )
     
     response = client.get(
@@ -407,9 +407,10 @@ def test_get_all_apartments_as_tenant_with_end_date_today(client, db: Session, t
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=1,
-        year=2025,
-        end_date=today,
+        start_month=1,
+        start_year=2025,
+        end_month=today.month,
+        end_year=today.year,
     )
     
     response = client.get(
@@ -426,7 +427,7 @@ def test_get_all_apartments_as_tenant_with_end_date_today(client, db: Session, t
 
 def test_get_all_apartments_as_tenant_excludes_closed_contracts(client, db: Session, tenant_token: str, tenant_user_dict: dict):
     """Test tenant cannot see apartments with closed contracts (end_date in the past)."""
-    from datetime import date, timedelta
+    from datetime import date
     from app.repositories.apartment import create_apartment
     from app.services.contract import create_contract
     
@@ -434,14 +435,23 @@ def test_get_all_apartments_as_tenant_excludes_closed_contracts(client, db: Sess
     apartment = create_apartment(db, floor=3, letter="C", is_mine=True)
     
     # Create closed contract (end_date in the past)
-    past_date = date.today() - timedelta(days=1)
+    # Use previous month to ensure the last day of that month is definitely in the past
+    today = date.today()
+    if today.month == 1:
+        end_month = 12
+        end_year = today.year - 1
+    else:
+        end_month = today.month - 1
+        end_year = today.year
+    
     create_contract(
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment.id,
-        month=1,
-        year=2024,
-        end_date=past_date,
+        start_month=1,
+        start_year=2024,
+        end_month=end_month,
+        end_year=end_year,
     )
     
     response = client.get(
@@ -624,8 +634,8 @@ def test_get_all_apartments_as_tenant_only_own_apartments(client, db: Session, t
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment1.id,
-        month=1,
-        year=2025,
+        start_month=1,
+        start_year=2025,
     )
     
     # Create open contract for another_tenant_user_dict with apartment2
@@ -633,8 +643,8 @@ def test_get_all_apartments_as_tenant_only_own_apartments(client, db: Session, t
         db,
         user_id=another_tenant_user_dict["id"],
         apartment_id=apartment2.id,
-        month=1,
-        year=2025,
+        start_month=1,
+        start_year=2025,
     )
     
     # Tenant should only see apartment1 (their own)
@@ -676,22 +686,22 @@ def test_get_all_apartments_as_tenant_multiple_open_contracts(client, db: Sessio
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment1.id,
-        month=1,
-        year=2025,
+        start_month=1,
+        start_year=2025,
     )
     create_contract(
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment2.id,
-        month=2,
-        year=2025,
+        start_month=2,
+        start_year=2025,
     )
     create_contract(
         db,
         user_id=tenant_user_dict["id"],
         apartment_id=apartment3.id,
-        month=3,
-        year=2025,
+        start_month=3,
+        start_year=2025,
     )
     
     response = client.get(

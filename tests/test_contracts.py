@@ -109,9 +109,10 @@ def test_create_contract_as_admin_success(client, db: Session, admin_token: str,
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
-            "end_date": "2025-12-31",
+            "start_month": 1,
+            "start_year": 2025,
+            "end_month": 12,
+            "end_year": 2025,
             "adjustment_months": 3,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -133,8 +134,8 @@ def test_create_contract_minimal_fields(client, db: Session, admin_token: str, t
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 6,
-            "year": 2025,
+            "start_month": 6,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -152,8 +153,8 @@ def test_create_contract_without_authentication(client, db: Session, tenant_user
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
     )
     assert response.status_code == 401
@@ -166,8 +167,8 @@ def test_create_contract_as_tenant_fails(client, db: Session, tenant_token: str,
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {tenant_token}"},
     )
@@ -182,8 +183,8 @@ def test_create_contract_as_accountant_fails(client, db: Session, accountant_tok
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {accountant_token}"},
     )
@@ -192,14 +193,14 @@ def test_create_contract_as_accountant_fails(client, db: Session, accountant_tok
 
 
 def test_create_contract_invalid_month_zero(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
-    """Test contract creation with month=0 fails."""
+    """Test contract creation with start_month=0 fails."""
     response = client.post(
         "/api/v1/contracts",
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 0,
-            "year": 2025,
+            "start_month": 0,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -213,8 +214,8 @@ def test_create_contract_invalid_month_negative(client, db: Session, admin_token
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": -1,
-            "year": 2025,
+            "start_month": -1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -222,14 +223,14 @@ def test_create_contract_invalid_month_negative(client, db: Session, admin_token
 
 
 def test_create_contract_invalid_month_too_large(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
-    """Test contract creation with month=13 fails."""
+    """Test contract creation with start_month=13 fails."""
     response = client.post(
         "/api/v1/contracts",
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 13,
-            "year": 2025,
+            "start_month": 13,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -243,8 +244,8 @@ def test_create_contract_invalid_month_100(client, db: Session, admin_token: str
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 100,
-            "year": 2025,
+            "start_month": 100,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -256,8 +257,8 @@ def test_create_contract_missing_required_fields(client, db: Session, admin_toke
     response = client.post(
         "/api/v1/contracts",
         json={
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
             # Missing user_id and apartment_id
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -272,8 +273,8 @@ def test_create_contract_user_not_found(client, db: Session, admin_token: str, a
         json={
             "user_id": 99999,
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -288,8 +289,8 @@ def test_create_contract_user_not_tenant(client, db: Session, admin_token: str, 
         json={
             "user_id": accountant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -304,8 +305,8 @@ def test_create_contract_apartment_not_found(client, db: Session, admin_token: s
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": 99999,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -321,8 +322,8 @@ def test_create_contract_duplicate(client, db: Session, admin_token: str, tenant
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 3,
-            "year": 2025,
+            "start_month": 3,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -334,8 +335,8 @@ def test_create_contract_duplicate(client, db: Session, admin_token: str, tenant
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 3,
-            "year": 2025,
+            "start_month": 3,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -351,8 +352,8 @@ def test_create_contract_duplicate_different_user_same_apartment(client, db: Ses
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 4,
-            "year": 2025,
+            "start_month": 4,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -364,8 +365,8 @@ def test_create_contract_duplicate_different_user_same_apartment(client, db: Ses
         json={
             "user_id": another_tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 4,
-            "year": 2025,
+            "start_month": 4,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -381,8 +382,8 @@ def test_create_contract_same_month_different_year_success(client, db: Session, 
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 5,
-            "year": 2025,
+            "start_month": 5,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -394,8 +395,8 @@ def test_create_contract_same_month_different_year_success(client, db: Session, 
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 5,
-            "year": 2026,
+            "start_month": 5,
+            "start_year": 2026,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -409,8 +410,8 @@ def test_create_contract_invalid_adjustment_months_zero(client, db: Session, adm
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
             "adjustment_months": 0,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -425,8 +426,8 @@ def test_create_contract_invalid_adjustment_months_negative(client, db: Session,
         json={
             "user_id": tenant_user_dict["id"],
             "apartment_id": apartment.id,
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
             "adjustment_months": -5,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -444,8 +445,8 @@ def test_get_all_contracts_as_admin(client, db: Session, admin_token: str, tenan
     from app.services.contract import create_contract
 
     # Use 2024 dates so contracts are active (start_date <= today, no end_date)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=2, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -467,7 +468,7 @@ def test_get_all_contracts_as_accountant_forbidden(client, db: Session, accounta
     """Test accountant cannot access GET /contracts."""
     from app.services.contract import create_contract
 
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -481,8 +482,8 @@ def test_get_all_contracts_as_tenant_only_own(client, db: Session, tenant_token:
     """Test tenant can only see their own contracts."""
     from app.services.contract import create_contract
 
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
-    create_contract(db, another_tenant_user_dict["id"], apartment.id, 2, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
+    create_contract(db, another_tenant_user_dict["id"], apartment.id, start_month=2, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -520,7 +521,7 @@ def test_get_all_contracts_pagination(client, db: Session, admin_token: str, ten
     from app.services.contract import create_contract
 
     for m in range(1, 6):
-        create_contract(db, tenant_user_dict["id"], apartment.id, m, 2024)
+        create_contract(db, tenant_user_dict["id"], apartment.id, start_month=m, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -549,9 +550,9 @@ def test_get_all_contracts_filter_by_user_admin(client, db: Session, admin_token
     """Test admin can filter contracts by user ID."""
     from app.services.contract import create_contract
 
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
-    create_contract(db, another_tenant_user_dict["id"], apartment.id, 3, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=2, start_year=2024)
+    create_contract(db, another_tenant_user_dict["id"], apartment.id, start_month=3, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -570,9 +571,9 @@ def test_get_all_contracts_filter_by_apartment_admin(client, db: Session, admin_
     from app.services.contract import create_contract
 
     apt2 = create_apartment(db, floor=2, letter="B", is_mine=False)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
-    create_contract(db, tenant_user_dict["id"], apt2.id, 3, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=2, start_year=2024)
+    create_contract(db, tenant_user_dict["id"], apt2.id, start_month=3, start_year=2024)
 
     response = client.get(
         "/api/v1/contracts",
@@ -590,16 +591,17 @@ def test_get_all_contracts_filter_active_admin(client, db: Session, admin_token:
     from app.services.contract import create_contract
 
     # Active: 2024, no end_date
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=2, start_year=2024)
     # Inactive: ended contract (2022–2023)
     create_contract(
         db,
         tenant_user_dict["id"],
         apartment.id,
-        1,
-        2022,
-        end_date=date(2023, 6, 30),
+        start_month=1,
+        start_year=2022,
+        end_month=6,
+        end_year=2023,
     )
 
     response = client.get(
@@ -628,7 +630,7 @@ def test_get_all_contracts_tenant_cannot_use_filters(client, db: Session, tenant
     """Test tenant cannot use user, apartment, or active filters."""
     from app.services.contract import create_contract
 
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2024)
 
     for params in [
         {"user": another_tenant_user_dict["id"]},
@@ -653,7 +655,7 @@ def test_get_contract_by_id_as_admin(client, db: Session, admin_token: str, tena
     """Test admin can get contract by ID."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.get(
         f"/api/v1/contracts/{contract.id}",
@@ -669,7 +671,7 @@ def test_get_contract_by_id_as_accountant(client, db: Session, accountant_token:
     """Test accountant can get contract by ID."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.get(
         f"/api/v1/contracts/{contract.id}",
@@ -684,7 +686,7 @@ def test_get_contract_by_id_as_tenant_own_contract(client, db: Session, tenant_t
     """Test tenant can get their own contract by ID."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.get(
         f"/api/v1/contracts/{contract.id}",
@@ -700,7 +702,7 @@ def test_get_contract_by_id_as_tenant_other_tenant_contract_fails(client, db: Se
     """Test tenant cannot get another tenant's contract."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, another_tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, another_tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.get(
         f"/api/v1/contracts/{contract.id}",
@@ -735,14 +737,15 @@ def test_update_contract_as_admin_success(client, db: Session, admin_token: str,
     """Test successful contract update by admin."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "month": 6,
-            "year": 2025,
-            "end_date": "2025-12-31",
+            "start_month": 6,
+            "start_year": 2025,
+            "end_month": 12,
+            "end_year": 2025,
             "adjustment_months": 2,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -760,7 +763,7 @@ def test_update_contract_partial_update(client, db: Session, admin_token: str, t
     
     # Create contract with end_date set
     contract = create_contract(
-        db, tenant_user_dict["id"], apartment.id, 1, 2025, end_date=date(2025, 12, 31)
+        db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025, end_month=12, end_year=2025
     )
     
     # Update only adjustment_months, other fields should remain unchanged
@@ -797,7 +800,7 @@ def test_update_contract_as_accountant_fails(client, db: Session, accountant_tok
     """Test accountant cannot update contracts."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
@@ -814,7 +817,7 @@ def test_update_contract_as_tenant_fails(client, db: Session, tenant_token: str,
     """Test tenant cannot update contracts."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
@@ -842,13 +845,13 @@ def test_update_contract_invalid_month_zero(client, db: Session, admin_token: st
     """Test contract update with month=0 fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "month": 0,
-            "year": 2025,
+            "start_month": 0,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -859,13 +862,13 @@ def test_update_contract_invalid_month_too_large(client, db: Session, admin_toke
     """Test contract update with month=13 fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "month": 13,
-            "year": 2025,
+            "start_month": 13,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -876,13 +879,13 @@ def test_update_contract_month_without_year_fails(client, db: Session, admin_tok
     """Test contract update with month but no year fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "month": 6,
-            # Missing year
+            "start_month": 6,
+            # Missing start_year
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -893,13 +896,13 @@ def test_update_contract_year_without_month_fails(client, db: Session, admin_tok
     """Test contract update with year but no month fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "year": 2026,
-            # Missing month
+            "start_year": 2026,
+            # Missing start_month
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -910,7 +913,7 @@ def test_update_contract_user_not_tenant(client, db: Session, admin_token: str, 
     """Test contract update with non-tenant user fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
@@ -928,15 +931,15 @@ def test_update_contract_duplicate(client, db: Session, admin_token: str, tenant
     from app.services.contract import create_contract
     
     # Create two contracts
-    contract1 = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
-    contract2 = create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2025)
+    contract1 = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
+    contract2 = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=2, start_year=2025)
     
     # Try to update contract2 to have same month+year as contract1
     response = client.put(
         f"/api/v1/contracts/{contract2.id}",
         json={
-            "month": 1,
-            "year": 2025,
+            "start_month": 1,
+            "start_year": 2025,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -948,7 +951,7 @@ def test_update_contract_invalid_adjustment_months_zero(client, db: Session, adm
     """Test contract update with adjustment_months=0 fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
@@ -964,7 +967,7 @@ def test_update_contract_invalid_adjustment_months_negative(client, db: Session,
     """Test contract update with negative adjustment_months fails."""
     from app.services.contract import create_contract
     
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
     
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
@@ -982,7 +985,7 @@ def test_update_contract_clear_end_date(client, db: Session, admin_token: str, t
     
     # Create contract with end_date
     contract = create_contract(
-        db, tenant_user_dict["id"], apartment.id, 1, 2025, end_date=date(2025, 12, 31)
+        db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025, end_month=12, end_year=2025
     )
     assert contract.end_date == date(2025, 12, 31)
     
@@ -990,7 +993,8 @@ def test_update_contract_clear_end_date(client, db: Session, admin_token: str, t
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "end_date": None,
+            "end_month": None,
+            "end_year": None,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -1033,9 +1037,10 @@ def test_update_contract_fields_not_provided_unchanged(client, db: Session, admi
         db,
         tenant_user_dict["id"],
         apartment.id,
-        1,
-        2025,
-        end_date=date(2025, 12, 31),
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
         adjustment_months=3,
     )
     
@@ -1065,9 +1070,10 @@ def test_update_contract_clear_both_nullable_fields(client, db: Session, admin_t
         db,
         tenant_user_dict["id"],
         apartment.id,
-        1,
-        2025,
-        end_date=date(2025, 12, 31),
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
         adjustment_months=5,
     )
     
@@ -1075,7 +1081,8 @@ def test_update_contract_clear_both_nullable_fields(client, db: Session, admin_t
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "end_date": None,
+            "end_month": None,
+            "end_year": None,
             "adjustment_months": None,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -1096,9 +1103,10 @@ def test_update_contract_partial_update_with_clear(client, db: Session, admin_to
         db,
         tenant_user_dict["id"],
         apartment.id,
-        1,
-        2025,
-        end_date=date(2025, 12, 31),
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
         adjustment_months=3,
     )
     
@@ -1107,7 +1115,8 @@ def test_update_contract_partial_update_with_clear(client, db: Session, admin_to
         f"/api/v1/contracts/{contract.id}",
         json={
             "adjustment_months": 10,
-            "end_date": None,
+            "end_month": None,
+            "end_year": None,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -1127,9 +1136,10 @@ def test_update_contract_empty_request_no_changes(client, db: Session, admin_tok
         db,
         tenant_user_dict["id"],
         apartment.id,
-        1,
-        2025,
-        end_date=date(2025, 12, 31),
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
         adjustment_months=3,
     )
     
@@ -1154,15 +1164,114 @@ def test_update_contract_end_date_precedes_start_date_fails(client, db: Session,
     from app.services.contract import create_contract
     
     # Create contract starting in June
-    contract = create_contract(db, tenant_user_dict["id"], apartment.id, 6, 2025)
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=6, start_year=2025)
     
     # Try to set end_date before start_date
     response = client.put(
         f"/api/v1/contracts/{contract.id}",
         json={
-            "end_date": "2025-05-31",  # Before June 1
+            "end_month": 5,
+            "end_year": 2025,  # Before June 1
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 400
     assert "cannot precede" in response.json()["detail"].lower()
+
+
+def test_create_contract_start_month_without_start_year_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract creation with start_month but no start_year fails."""
+    response = client.post(
+        "/api/v1/contracts",
+        json={
+            "user_id": tenant_user_dict["id"],
+            "apartment_id": apartment.id,
+            "start_month": 1,
+            # Missing start_year
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_create_contract_start_year_without_start_month_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract creation with start_year but no start_month fails."""
+    response = client.post(
+        "/api/v1/contracts",
+        json={
+            "user_id": tenant_user_dict["id"],
+            "apartment_id": apartment.id,
+            "start_year": 2025,
+            # Missing start_month
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_create_contract_end_month_without_end_year_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract creation with end_month but no end_year fails."""
+    response = client.post(
+        "/api/v1/contracts",
+        json={
+            "user_id": tenant_user_dict["id"],
+            "apartment_id": apartment.id,
+            "start_month": 1,
+            "start_year": 2025,
+            "end_month": 12,
+            # Missing end_year
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_create_contract_end_year_without_end_month_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract creation with end_year but no end_month fails."""
+    response = client.post(
+        "/api/v1/contracts",
+        json={
+            "user_id": tenant_user_dict["id"],
+            "apartment_id": apartment.id,
+            "start_month": 1,
+            "start_year": 2025,
+            "end_year": 2025,
+            # Missing end_month
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_update_contract_end_month_without_end_year_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract update with end_month but no end_year fails."""
+    from app.services.contract import create_contract
+    
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
+    
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "end_month": 12,
+            # Missing end_year
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_update_contract_end_year_without_end_month_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test contract update with end_year but no end_month fails."""
+    from app.services.contract import create_contract
+    
+    contract = create_contract(db, tenant_user_dict["id"], apartment.id, start_month=1, start_year=2025)
+    
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "end_year": 2025,
+            # Missing end_month
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 422
