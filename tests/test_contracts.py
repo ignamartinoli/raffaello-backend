@@ -440,72 +440,208 @@ def test_create_contract_invalid_adjustment_months_negative(client, db: Session,
 
 
 def test_get_all_contracts_as_admin(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
-    """Test admin can get all contracts."""
-    # Create some contracts
+    """Test admin can get all contracts (paginated)."""
     from app.services.contract import create_contract
-    
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2025)
-    
+
+    # Use 2024 dates so contracts are active (start_date <= today, no end_date)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+
     response = client.get(
         "/api/v1/contracts",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 100
 
 
-def test_get_all_contracts_as_accountant(client, db: Session, accountant_token: str, tenant_user_dict: dict, apartment):
-    """Test accountant can get all contracts."""
-    # Create some contracts
+def test_get_all_contracts_as_accountant_forbidden(client, db: Session, accountant_token: str, tenant_user_dict: dict, apartment):
+    """Test accountant cannot access GET /contracts."""
     from app.services.contract import create_contract
-    
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
-    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2025)
-    
+
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+
     response = client.get(
         "/api/v1/contracts",
         headers={"Authorization": f"Bearer {accountant_token}"},
     )
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
 
 
 def test_get_all_contracts_as_tenant_only_own(client, db: Session, tenant_token: str, tenant_user_dict: dict, another_tenant_user_dict: dict, apartment):
     """Test tenant can only see their own contracts."""
-    # Create contracts for both tenants
     from app.services.contract import create_contract
-    
-    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2025)
-    create_contract(db, another_tenant_user_dict["id"], apartment.id, 2, 2025)
-    
+
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, another_tenant_user_dict["id"], apartment.id, 2, 2024)
+
     response = client.get(
         "/api/v1/contracts",
         headers={"Authorization": f"Bearer {tenant_token}"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["user_id"] == tenant_user_dict["id"]
+    assert len(data["items"]) == 1
+    assert data["items"][0]["user_id"] == tenant_user_dict["id"]
+    assert data["total"] == 1
 
 
 def test_get_all_contracts_empty_list(client, db: Session, admin_token: str):
-    """Test getting all contracts when none exist returns empty list."""
+    """Test getting all contracts when none exist returns paginated empty list."""
     response = client.get(
         "/api/v1/contracts",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert data == []
+    assert data["items"] == []
+    assert data["total"] == 0
+    assert data["page"] == 1
+    assert data["page_size"] == 100
 
 
 def test_get_all_contracts_without_authentication(client, db: Session):
     """Test getting all contracts without authentication fails."""
     response = client.get("/api/v1/contracts")
     assert response.status_code == 401
+
+
+def test_get_all_contracts_pagination(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test pagination with page and page_size."""
+    from app.services.contract import create_contract
+
+    for m in range(1, 6):
+        create_contract(db, tenant_user_dict["id"], apartment.id, m, 2024)
+
+    response = client.get(
+        "/api/v1/contracts",
+        params={"page": 1, "page_size": 2},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 5
+    assert data["page"] == 1
+    assert data["page_size"] == 2
+
+    response2 = client.get(
+        "/api/v1/contracts",
+        params={"page": 2, "page_size": 2},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert len(data2["items"]) == 2
+    assert data2["page"] == 2
+
+
+def test_get_all_contracts_filter_by_user_admin(client, db: Session, admin_token: str, tenant_user_dict: dict, another_tenant_user_dict: dict, apartment):
+    """Test admin can filter contracts by user ID."""
+    from app.services.contract import create_contract
+
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+    create_contract(db, another_tenant_user_dict["id"], apartment.id, 3, 2024)
+
+    response = client.get(
+        "/api/v1/contracts",
+        params={"user": tenant_user_dict["id"]},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert all(c["user_id"] == tenant_user_dict["id"] for c in data["items"])
+
+
+def test_get_all_contracts_filter_by_apartment_admin(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test admin can filter contracts by apartment ID."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+
+    apt2 = create_apartment(db, floor=2, letter="B", is_mine=False)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+    create_contract(db, tenant_user_dict["id"], apt2.id, 3, 2024)
+
+    response = client.get(
+        "/api/v1/contracts",
+        params={"apartment": apartment.id},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert all(c["apartment_id"] == apartment.id for c in data["items"])
+
+
+def test_get_all_contracts_filter_active_admin(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test admin can filter by active status (default True shows only active)."""
+    from app.services.contract import create_contract
+
+    # Active: 2024, no end_date
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+    create_contract(db, tenant_user_dict["id"], apartment.id, 2, 2024)
+    # Inactive: ended contract (2022–2023)
+    create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        1,
+        2022,
+        end_date=date(2023, 6, 30),
+    )
+
+    response = client.get(
+        "/api/v1/contracts",
+        params={"active": True},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
+
+    response_inactive = client.get(
+        "/api/v1/contracts",
+        params={"active": False},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response_inactive.status_code == 200
+    data_inactive = response_inactive.json()
+    assert len(data_inactive["items"]) == 1
+    assert data_inactive["items"][0]["start_date"] == "2022-01-01"
+    assert data_inactive["items"][0]["end_date"] == "2023-06-30"
+
+
+def test_get_all_contracts_tenant_cannot_use_filters(client, db: Session, tenant_token: str, tenant_user_dict: dict, another_tenant_user_dict: dict, apartment):
+    """Test tenant cannot use user, apartment, or active filters."""
+    from app.services.contract import create_contract
+
+    create_contract(db, tenant_user_dict["id"], apartment.id, 1, 2024)
+
+    for params in [
+        {"user": another_tenant_user_dict["id"]},
+        {"apartment": apartment.id},
+        {"active": False},
+    ]:
+        response = client.get(
+            "/api/v1/contracts",
+            params=params,
+            headers={"Authorization": f"Bearer {tenant_token}"},
+        )
+        assert response.status_code == 403, f"Expected 403 for params {params}"
+        assert "Filters are only allowed for admin users" in response.json()["detail"]
 
 
 # ============================================================================
