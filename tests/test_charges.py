@@ -968,6 +968,368 @@ def test_get_all_charges_filter_by_period_tenant_hidden_charge_not_included(clie
     assert data[0]["is_visible"] is True
 
 
+def test_get_all_charges_filter_by_unpaid_true(client, db: Session, admin_token: str, contract):
+    """Test filtering charges by unpaid=True returns only charges with payment_date=None."""
+    # Create unpaid charge (no payment_date)
+    unpaid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_charge.status_code == 201
+    unpaid_charge_id = unpaid_charge.json()["id"]
+    
+    # Create paid charge (with payment_date)
+    paid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-11-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert paid_charge.status_code == 201
+    paid_charge_id = paid_charge.json()["id"]
+    
+    # Filter by unpaid=True
+    response = client.get(
+        "/api/v1/charges?unpaid=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should only return unpaid charge
+    assert any(charge["id"] == unpaid_charge_id for charge in data)
+    assert not any(charge["id"] == paid_charge_id for charge in data)
+    # Verify all returned charges are unpaid
+    for charge in data:
+        assert charge["payment_date"] is None
+
+
+def test_get_all_charges_filter_by_unpaid_false(client, db: Session, admin_token: str, contract):
+    """Test filtering charges by unpaid=False returns only charges with payment_date set."""
+    # Create unpaid charge (no payment_date)
+    unpaid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_charge.status_code == 201
+    unpaid_charge_id = unpaid_charge.json()["id"]
+    
+    # Create paid charge (with payment_date)
+    paid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-11-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert paid_charge.status_code == 201
+    paid_charge_id = paid_charge.json()["id"]
+    
+    # Filter by unpaid=False
+    response = client.get(
+        "/api/v1/charges?unpaid=false",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should only return paid charge
+    assert any(charge["id"] == paid_charge_id for charge in data)
+    assert not any(charge["id"] == unpaid_charge_id for charge in data)
+    # Verify all returned charges are paid
+    for charge in data:
+        assert charge["payment_date"] is not None
+
+
+def test_get_all_charges_filter_by_unpaid_combined_with_period(client, db: Session, admin_token: str, contract, another_contract):
+    """Test filtering charges by unpaid combined with year/month filters."""
+    # Create unpaid charge for October 2025 on first contract
+    unpaid_oct = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_oct.status_code == 201
+    unpaid_oct_id = unpaid_oct.json()["id"]
+    
+    # Create paid charge for October 2025 on different contract
+    paid_oct = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": another_contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-10-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert paid_oct.status_code == 201
+    paid_oct_id = paid_oct.json()["id"]
+    
+    # Create unpaid charge for November 2025
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by period and unpaid=True
+    response = client.get(
+        "/api/v1/charges?year=2025&month=10&unpaid=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should only return unpaid charge for October
+    assert len(data) == 1
+    assert data[0]["id"] == unpaid_oct_id
+    assert data[0]["payment_date"] is None
+
+
+def test_get_all_charges_filter_by_unpaid_as_accountant(client, db: Session, admin_token: str, accountant_token: str, contract):
+    """Test accountant can filter charges by unpaid status."""
+    # Create unpaid charge
+    unpaid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_charge.status_code == 201
+    unpaid_charge_id = unpaid_charge.json()["id"]
+    
+    # Create paid charge
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-11-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by unpaid=True as accountant
+    response = client.get(
+        "/api/v1/charges?unpaid=true",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert any(charge["id"] == unpaid_charge_id for charge in data)
+    for charge in data:
+        assert charge["payment_date"] is None
+
+
+def test_get_all_charges_filter_by_unpaid_as_tenant(client, db: Session, admin_token: str, tenant_token: str, contract):
+    """Test tenant can filter visible charges by unpaid status."""
+    # Create visible unpaid charge
+    unpaid_visible = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_visible.status_code == 201
+    unpaid_visible_id = unpaid_visible.json()["id"]
+    
+    # Create visible paid charge
+    paid_visible = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+            "payment_date": "2025-11-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert paid_visible.status_code == 201
+    paid_visible_id = paid_visible.json()["id"]
+    
+    # Create hidden unpaid charge (should not be visible to tenant)
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 12,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    
+    # Filter by unpaid=True as tenant
+    response = client.get(
+        "/api/v1/charges?unpaid=true",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should only return visible unpaid charge
+    assert len(data) == 1
+    assert data[0]["id"] == unpaid_visible_id
+    assert data[0]["payment_date"] is None
+    assert data[0]["is_visible"] is True
+
+
+def test_get_all_charges_without_unpaid_filter_returns_all(client, db: Session, admin_token: str, contract):
+    """Test that when unpaid filter is not provided, all charges are returned."""
+    # Create unpaid charge
+    unpaid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_charge.status_code == 201
+    unpaid_charge_id = unpaid_charge.json()["id"]
+    
+    # Create paid charge
+    paid_charge = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 11,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-11-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert paid_charge.status_code == 201
+    paid_charge_id = paid_charge.json()["id"]
+    
+    # Get all charges without unpaid filter
+    response = client.get(
+        "/api/v1/charges",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should return both charges
+    assert any(charge["id"] == unpaid_charge_id for charge in data)
+    assert any(charge["id"] == paid_charge_id for charge in data)
+
+
 # ============================================================================
 # GET CHARGE BY ID TESTS
 # ============================================================================
