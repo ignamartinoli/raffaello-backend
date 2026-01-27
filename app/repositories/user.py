@@ -101,7 +101,7 @@ def update_user(
 
 
 def get_all_users_paginated(
-    db: Session, page: int = 1, page_size: int = 100
+    db: Session, page: int = 1, page_size: int = 100, name: str | None = None
 ) -> tuple[list[UserModel], int]:
     """
     Get all users with pagination, sorted by name for stable pagination.
@@ -109,11 +109,17 @@ def get_all_users_paginated(
     Args:
         page: Page number (1-indexed)
         page_size: Number of items per page
+        name: Optional name filter (case-insensitive partial match)
 
     Returns:
         Tuple of (list of users, total count)
     """
     query = db.query(UserModel)
+
+    # Apply name filter if provided
+    if name:
+        query = query.filter(UserModel.name.ilike(f"%{name}%"))
+
     total = query.count()
     skip = (page - 1) * page_size
     users = query.order_by(UserModel.name).offset(skip).limit(page_size).all()

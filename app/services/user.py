@@ -139,7 +139,7 @@ def update_user(
 
 
 def get_all_users(
-    db: Session, page: int = 1, page_size: int = 100
+    db: Session, page: int = 1, page_size: int = 100, name: str | None = None
 ) -> tuple[list[UserModel], int]:
     """
     Get all users with pagination.
@@ -150,8 +150,11 @@ def get_all_users(
     Args:
         page: Page number (1-indexed)
         page_size: Number of items per page
+        name: Optional name filter (case-insensitive partial match)
 
     Returns:
         Tuple of (list of users, total count)
     """
-    return user_repo.get_all_users_paginated(db, page=page, page_size=page_size)
+    return user_repo.get_all_users_paginated(
+        db, page=page, page_size=page_size, name=name
+    )
