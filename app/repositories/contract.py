@@ -1,4 +1,5 @@
 from datetime import date
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.db.models.contract import Contract as ContractModel
@@ -49,14 +50,14 @@ def update_contract(
 ) -> ContractModel:
     """
     Update a contract. Only updates fields that are explicitly provided.
-    
+
     To clear a field (set to None), explicitly pass it with None value.
     Fields not provided are not updated.
     """
     contract = get_contract_by_id(db, contract_id)
     if not contract:
         raise NotFoundError("Contract not found")
-    
+
     # Update only the fields that were explicitly provided
     if "user_id" in kwargs:
         contract.user_id = kwargs["user_id"]
@@ -68,7 +69,7 @@ def update_contract(
         contract.end_date = kwargs["end_date"]  # Can be None to clear
     if "adjustment_months" in kwargs:
         contract.adjustment_months = kwargs["adjustment_months"]  # Can be None to clear
-    
+
     db.commit()
     db.refresh(contract)
     return contract
@@ -80,7 +81,77 @@ def get_contract_by_start_date_and_apartment(
     apartment_id: int,
 ) -> ContractModel | None:
     """Get a contract by start_date and apartment_id. Used to check for duplicates."""
-    return db.query(ContractModel).filter(
-        ContractModel.start_date == start_date,
-        ContractModel.apartment_id == apartment_id,
-    ).first()
+    return (
+        db.query(ContractModel)
+        .filter(
+            ContractModel.start_date == start_date,
+            ContractModel.apartment_id == apartment_id,
+        )
+        .first()
+    )
+
+
+def get_all_contracts_paginated(
+    db: Session,
+    page: int = 1,
+    page_size: int = 100,
+    user_id: int | None = None,
+    apartment_id: int | None = None,
+    active: bool = True,
+) -> tuple[list[ContractModel], int]:
+    """
+    Get all contracts with pagination and optional filters.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        user_id: Optional filter by user ID
+        apartment_id: Optional filter by apartment ID
+        active: Filter by active status (default True). Active means:
+                start_date <= today AND (end_date IS NULL OR end_date >= today)
+
+    Returns:
+        Tuple of (list of contracts, total count)
+    """
+    query = db.query(ContractModel)
+
+    # Apply user_id filter if provided
+    if user_id is not None:
+        query = query.filter(ContractModel.user_id == user_id)
+
+    # Apply apartment_id filter if provided
+    if apartment_id is not None:
+        query = query.filter(ContractModel.apartment_id == apartment_id)
+
+    # Apply active filter
+    today = date.today()
+    if active:
+        # Active: start_date <= today AND (end_date IS NULL OR end_date >= today)
+        query = query.filter(
+            ContractModel.start_date <= today,
+            or_(
+                ContractModel.end_date.is_(None),
+                ContractModel.end_date >= today,
+            ),
+        )
+    else:
+        # Not active: start_date > today OR (end_date IS NOT NULL AND end_date < today)
+        query = query.filter(
+            or_(
+                ContractModel.start_date > today,
+                and_(
+                    ContractModel.end_date.isnot(None),
+                    ContractModel.end_date < today,
+                ),
+            ),
+        )
+
+    total = query.count()
+    skip = (page - 1) * page_size
+    contracts = (
+        query.order_by(ContractModel.start_date.desc())
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
+    return contracts, total
