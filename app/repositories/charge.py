@@ -18,9 +18,12 @@ def get_charge_by_id(db: Session, charge_id: int) -> ChargeModel | None:
 
 
 def get_all_charges(
-    db: Session, year: int | None = None, month: int | None = None
+    db: Session,
+    year: int | None = None,
+    month: int | None = None,
+    unpaid: bool | None = None,
 ) -> list[ChargeModel]:
-    """Get all charges, optionally filtered by year and month."""
+    """Get all charges, optionally filtered by year, month, and unpaid status."""
     query = db.query(ChargeModel)
 
     if year is not None and month is not None:
@@ -31,6 +34,12 @@ def get_all_charges(
             )
         )
 
+    if unpaid is not None:
+        if unpaid:
+            query = query.filter(ChargeModel.payment_date.is_(None))
+        else:
+            query = query.filter(ChargeModel.payment_date.isnot(None))
+
     return query.all()
 
 
@@ -40,12 +49,16 @@ def get_charges_by_contract_id(db: Session, contract_id: int) -> list[ChargeMode
 
 
 def get_visible_charges_by_user_id(
-    db: Session, user_id: int, year: int | None = None, month: int | None = None
+    db: Session,
+    user_id: int,
+    year: int | None = None,
+    month: int | None = None,
+    unpaid: bool | None = None,
 ) -> list[ChargeModel]:
     """
     Get all visible charges for contracts belonging to a specific user.
     Used for tenant access - tenants can only see charges that are visible and belong to their contracts.
-    Optionally filtered by year and month.
+    Optionally filtered by year, month, and unpaid status.
     """
     query = (
         db.query(ChargeModel)
@@ -60,6 +73,12 @@ def get_visible_charges_by_user_id(
                 extract("month", ChargeModel.period) == month,
             )
         )
+
+    if unpaid is not None:
+        if unpaid:
+            query = query.filter(ChargeModel.payment_date.is_(None))
+        else:
+            query = query.filter(ChargeModel.payment_date.isnot(None))
 
     return query.all()
 
