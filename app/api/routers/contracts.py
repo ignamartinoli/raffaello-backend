@@ -25,9 +25,10 @@ def create_new_contract(
         db,
         user_id=contract_data.user_id,
         apartment_id=contract_data.apartment_id,
-        month=contract_data.month,
-        year=contract_data.year,
-        end_date=contract_data.end_date,
+        start_month=contract_data.start_month,
+        start_year=contract_data.start_year,
+        end_month=contract_data.end_month,
+        end_year=contract_data.end_year,
         adjustment_months=contract_data.adjustment_months,
     )
     return Contract.model_validate(contract)
