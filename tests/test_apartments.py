@@ -194,6 +194,21 @@ def test_create_apartment_invalid_letter_too_long(client, db: Session, admin_tok
     assert response.status_code == 422
 
 
+def test_create_apartment_invalid_letter_empty(client, db: Session, admin_token: str):
+    """Test apartment creation with empty letter fails."""
+    response = client.post(
+        "/api/v1/apartments",
+        json={
+            "floor": 1,
+            "letter": "",  # Empty string
+            "is_mine": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # Pydantic validates min_length at request parsing level (422)
+    assert response.status_code == 422
+
+
 def test_create_apartment_missing_required_fields(client, db: Session, admin_token: str):
     """Test apartment creation with missing required fields fails."""
     response = client.post(
@@ -1030,3 +1045,37 @@ def test_update_apartment_to_same_floor_letter(client, db: Session, admin_token:
     assert data["floor"] == 1
     assert data["letter"] == "A"
     assert data["is_mine"] is False
+
+
+def test_update_apartment_invalid_letter_too_long(client, db: Session, admin_token: str):
+    """Test apartment update with letter longer than 1 character fails."""
+    from app.repositories.apartment import create_apartment
+    
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    response = client.put(
+        f"/api/v1/apartments/{apartment.id}",
+        json={
+            "letter": "AB",  # Too long
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # Pydantic validates max_length at request parsing level (422)
+    assert response.status_code == 422
+
+
+def test_update_apartment_invalid_letter_empty(client, db: Session, admin_token: str):
+    """Test apartment update with empty letter fails."""
+    from app.repositories.apartment import create_apartment
+    
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    response = client.put(
+        f"/api/v1/apartments/{apartment.id}",
+        json={
+            "letter": "",  # Empty string
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # Pydantic validates min_length at request parsing level (422)
+    assert response.status_code == 422
