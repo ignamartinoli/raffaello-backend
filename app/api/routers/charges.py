@@ -50,6 +50,7 @@ def get_all_charges(
     unpaid: bool | None = Query(
         None, description="Filter by unpaid charges (payment_date is None)"
     ),
+    apartment: int | None = Query(None, description="Filter by apartment ID"),
 ):
     """
     Get all charges.
@@ -60,6 +61,7 @@ def get_all_charges(
     - year: Filter charges by year (must be provided with month)
     - month: Filter charges by month (must be provided with year)
     - unpaid: Filter by unpaid charges (when True, returns only charges with payment_date is None)
+    - apartment: Filter by apartment ID
     """
     # Validate that both year and month are provided together if one is provided
     if (year is None) != (month is None):
@@ -69,10 +71,17 @@ def get_all_charges(
         )
 
     if current_user.role.name in ("admin", "accountant"):
-        charges = charge_repo.get_all_charges(db, year=year, month=month, unpaid=unpaid)
+        charges = charge_repo.get_all_charges(
+            db, year=year, month=month, unpaid=unpaid, apartment_id=apartment
+        )
     elif current_user.role.name == "tenant":
         charges = charge_repo.get_visible_charges_by_user_id(
-            db, current_user.id, year=year, month=month, unpaid=unpaid
+            db,
+            current_user.id,
+            year=year,
+            month=month,
+            unpaid=unpaid,
+            apartment_id=apartment,
         )
     else:
         raise HTTPException(

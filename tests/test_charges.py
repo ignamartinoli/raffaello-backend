@@ -111,6 +111,13 @@ def another_tenant_token(another_tenant_user_dict: dict) -> str:
 
 
 @pytest.fixture(scope="function")
+def another_apartment(db: Session):
+    """Create a second apartment for testing (e.g. apartment filter)."""
+    from app.repositories.apartment import create_apartment
+    return create_apartment(db, floor=2, letter="B", is_mine=False)
+
+
+@pytest.fixture(scope="function")
 def another_contract(db: Session, another_tenant_user_dict: dict, apartment):
     """Create another contract for testing."""
     from app.services.contract import create_contract
@@ -119,6 +126,19 @@ def another_contract(db: Session, another_tenant_user_dict: dict, apartment):
         user_id=another_tenant_user_dict["id"],
         apartment_id=apartment.id,
         start_month=2,
+        start_year=2025,
+    )
+
+
+@pytest.fixture(scope="function")
+def contract_other_apartment(db: Session, another_tenant_user_dict: dict, another_apartment):
+    """Create a contract in another apartment (for apartment filter tests)."""
+    from app.services.contract import create_contract
+    return create_contract(
+        db,
+        user_id=another_tenant_user_dict["id"],
+        apartment_id=another_apartment.id,
+        start_month=1,
         start_year=2025,
     )
 
@@ -1328,6 +1348,264 @@ def test_get_all_charges_without_unpaid_filter_returns_all(client, db: Session, 
     # Should return both charges
     assert any(charge["id"] == unpaid_charge_id for charge in data)
     assert any(charge["id"] == paid_charge_id for charge in data)
+
+
+def test_get_all_charges_filter_by_apartment_admin(
+    client, db: Session, admin_token: str, contract, contract_other_apartment, apartment, another_apartment
+):
+    """Test admin can filter charges by apartment ID."""
+    # Create charge in first apartment (contract)
+    charge_a = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 5,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge_a.status_code == 201
+    charge_a_id = charge_a.json()["id"]
+
+    # Create charge in second apartment (contract_other_apartment)
+    charge_b = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract_other_apartment.id,
+            "month": 5,
+            "year": 2025,
+            "rent": 1200,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge_b.status_code == 201
+    charge_b_id = charge_b.json()["id"]
+
+    # Filter by first apartment
+    response_a = client.get(
+        f"/api/v1/charges?apartment={apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response_a.status_code == 200
+    data_a = response_a.json()
+    assert len(data_a) == 1
+    assert data_a[0]["id"] == charge_a_id
+
+    # Filter by second apartment
+    response_b = client.get(
+        f"/api/v1/charges?apartment={another_apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response_b.status_code == 200
+    data_b = response_b.json()
+    assert len(data_b) == 1
+    assert data_b[0]["id"] == charge_b_id
+
+
+def test_get_all_charges_filter_by_apartment_accountant(
+    client, db: Session, admin_token: str, accountant_token: str, contract, contract_other_apartment, apartment, another_apartment
+):
+    """Test accountant can filter charges by apartment ID."""
+    # Create charges in both apartments
+    create_a = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 6,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_a.status_code == 201
+
+    charge_b = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract_other_apartment.id,
+            "month": 6,
+            "year": 2025,
+            "rent": 1200,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge_b.status_code == 201
+    charge_b_id = charge_b.json()["id"]
+
+    # Filter by second apartment as accountant
+    response = client.get(
+        f"/api/v1/charges?apartment={another_apartment.id}",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == charge_b_id
+
+
+def test_get_all_charges_filter_by_apartment_tenant(
+    client, db: Session, admin_token: str, tenant_token: str, contract, another_apartment, apartment
+):
+    """Test tenant can filter visible charges by apartment (only their contracts)."""
+    # Create visible charge in tenant's apartment
+    charge_own = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 7,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert charge_own.status_code == 201
+    charge_own_id = charge_own.json()["id"]
+
+    # Tenant filters by their apartment -> sees the charge
+    response = client.get(
+        f"/api/v1/charges?apartment={apartment.id}",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == charge_own_id
+
+    # Tenant filters by other apartment (no contract there) -> empty
+    response_other = client.get(
+        f"/api/v1/charges?apartment={another_apartment.id}",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response_other.status_code == 200
+    assert response_other.json() == []
+
+
+def test_get_all_charges_filter_by_apartment_combined_with_period_unpaid(
+    client, db: Session, admin_token: str, contract, contract_other_apartment, apartment, another_apartment
+):
+    """Test filtering by apartment combined with year/month and unpaid."""
+    # Unpaid charge in apartment A, Oct 2025
+    unpaid_a = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert unpaid_a.status_code == 201
+    unpaid_a_id = unpaid_a.json()["id"]
+
+    # Paid charge in apartment A, Oct 2025
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-10-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    # Unpaid charge in apartment B, Oct 2025
+    client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract_other_apartment.id,
+            "month": 10,
+            "year": 2025,
+            "rent": 1200,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    # Apartment A + Oct 2025 + unpaid -> only unpaid in A
+    response = client.get(
+        f"/api/v1/charges?apartment={apartment.id}&year=2025&month=10&unpaid=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == unpaid_a_id
+    assert data[0]["payment_date"] is None
+
+
+def test_get_all_charges_filter_by_apartment_no_matches(
+    client, db: Session, admin_token: str, contract, another_apartment, apartment
+):
+    """Test filtering by apartment with no charges returns empty list."""
+    # Create charge only in first apartment
+    create_resp = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 8,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_resp.status_code == 201
+
+    # Filter by second apartment (no charges)
+    response = client.get(
+        f"/api/v1/charges?apartment={another_apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 # ============================================================================
