@@ -6,7 +6,7 @@ class Apartment(BaseModel):
 
     id: int
     floor: int
-    letter: str = Field(..., max_length=1)
+    letter: str = Field(..., min_length=1, max_length=1)
     is_mine: bool
     ecogas: int | None = None
     epec_client: int | None = None
@@ -16,7 +16,7 @@ class Apartment(BaseModel):
 
 class ApartmentCreate(BaseModel):
     floor: int
-    letter: str = Field(..., max_length=1)
+    letter: str = Field(..., min_length=1, max_length=1)
     is_mine: bool
     ecogas: int | None = None
     epec_client: int | None = None
@@ -26,7 +26,7 @@ class ApartmentCreate(BaseModel):
 
 class ApartmentUpdate(BaseModel):
     floor: int | None = None
-    letter: str | None = Field(None, max_length=1)
+    letter: str | None = Field(None, min_length=1, max_length=1)
     is_mine: bool | None = None
     ecogas: int | None = None
     epec_client: int | None = None
