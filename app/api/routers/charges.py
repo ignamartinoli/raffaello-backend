@@ -9,11 +9,11 @@ from app.services.charge import (
     send_charge_email,
     get_latest_adjusted_charge_by_contract_id,
     estimate_adjustment_by_contract_id,
+    list_charges_for_user,
+    get_charge_for_user,
 )
-import app.repositories.charge as charge_repo
 from app.schemas.charge import Charge, ChargeCreate, ChargeUpdate
 from app.db.models.user import User
-from app.errors import NotFoundError
 
 router = APIRouter(prefix="/charges", tags=["charges"])
 
@@ -70,33 +70,21 @@ def get_all_charges(
     - unpaid: Filter by unpaid charges (when True, returns only charges with payment_date is None)
     - apartment: Filter by apartment ID
     """
-    # Validate that both year and month are provided together if one is provided
     if (year is None) != (month is None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Both year and month must be provided together, or neither",
         )
 
-    if current_user.role.name in ("admin", "accountant"):
-        charges = charge_repo.get_all_charges(
-            db, year=year, month=month, unpaid=unpaid, apartment_id=apartment
-        )
-    elif current_user.role.name == "tenant":
-        charges = charge_repo.get_visible_charges_by_user_id(
-            db,
-            current_user.id,
-            year=year,
-            month=month,
-            unpaid=unpaid,
-            apartment_id=apartment,
-        )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
-        )
-
-    return [Charge.model_validate(charge) for charge in charges]
+    charges = list_charges_for_user(
+        db,
+        current_user,
+        year=year,
+        month=month,
+        unpaid=unpaid,
+        apartment_id=apartment,
+    )
+    return [Charge.model_validate(c) for c in charges]
 
 
 @router.get("/latest-adjusted", response_model=Charge)
@@ -149,18 +137,7 @@ def get_charge_by_id(
     - Admin and Accountant: can see any charge
     - Tenant: can only see visible charges for contracts with their user_id
     """
-    charge = charge_repo.get_charge_by_id(db, charge_id)
-    if not charge:
-        raise NotFoundError("Charge not found")
-
-    # Check access: tenant can only see visible charges for their contracts
-    if current_user.role.name == "tenant":
-        if not charge.is_visible or charge.contract.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
-            )
-
+    charge = get_charge_for_user(db, charge_id, current_user)
     return Charge.model_validate(charge)
 
 
