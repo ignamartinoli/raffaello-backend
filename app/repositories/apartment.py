@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.models.apartment import Apartment as ApartmentModel
 from app.db.models.contract import Contract as ContractModel
 from app.domain.contract_activity import ContractActivityPolicy
-from app.errors import DuplicateResourceError, NotFoundError
+from app.errors import NotFoundError
 
 
 def get_apartment_by_id(db: Session, apartment_id: int) -> ApartmentModel | None:
@@ -21,8 +21,8 @@ def get_apartments_with_open_contracts_by_user_id(
     db: Session, user_id: int
 ) -> list[ApartmentModel]:
     """
-    Get apartments for which the user has an open contract.
-    An open contract is defined by the domain-level ContractActivityPolicy.
+    Apartments for which the user has an open contract.
+    "Open" is defined by ContractActivityPolicy (domain); this builds the query.
     """
     policy = ContractActivityPolicy(as_of=date.today())
     return (
@@ -62,14 +62,7 @@ def create_apartment(
     epec_contract: int | None = None,
     water: int | None = None,
 ) -> ApartmentModel:
-    """Create a new apartment in the database. Pure data access - no business logic."""
-    # Check for uniqueness of floor and letter combination
-    existing = get_apartment_by_floor_letter(db, floor, letter)
-    if existing:
-        raise DuplicateResourceError(
-            f"An apartment with floor {floor} and letter {letter} already exists"
-        )
-
+    """Create a new apartment. Pure persistence; no business logic."""
     db_apartment = ApartmentModel(
         floor=floor,
         letter=letter,
@@ -96,24 +89,10 @@ def update_apartment(
     epec_contract: int | None = None,
     water: int | None = None,
 ) -> ApartmentModel:
-    """Update an apartment."""
+    """Update an apartment by ID. Raises NotFoundError if not found. Pure persistence."""
     apartment = get_apartment_by_id(db, apartment_id)
     if not apartment:
         raise NotFoundError("Apartment not found")
-
-    # Determine the final floor and letter values after update
-    final_floor = floor if floor is not None else apartment.floor
-    final_letter = letter if letter is not None else apartment.letter
-
-    # Check for uniqueness if floor or letter is being changed
-    if floor is not None or letter is not None:
-        existing = get_apartment_by_floor_letter(
-            db, final_floor, final_letter, exclude_id=apartment_id
-        )
-        if existing:
-            raise DuplicateResourceError(
-                f"An apartment with floor {final_floor} and letter {final_letter} already exists"
-            )
 
     if floor is not None:
         apartment.floor = floor
@@ -136,7 +115,7 @@ def update_apartment(
 
 
 def delete_apartment(db: Session, apartment_id: int) -> None:
-    """Delete an apartment from the database. Pure data access - no business logic."""
+    """Delete an apartment by ID. Raises NotFoundError if not found. Pure persistence."""
     apartment = get_apartment_by_id(db, apartment_id)
     if not apartment:
         raise NotFoundError("Apartment not found")
