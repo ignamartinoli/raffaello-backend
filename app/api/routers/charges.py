@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles, get_current_user
-from app.services.charge import create_charge, update_charge
+from app.services.charge import create_charge, update_charge, send_charge_email
 import app.repositories.charge as charge_repo
 from app.schemas.charge import Charge, ChargeCreate, ChargeUpdate
 from app.db.models.user import User
@@ -134,3 +134,26 @@ def update_charge_by_id(
     update_data = charge_data.model_dump(exclude_unset=True)
     charge = update_charge(db, charge_id=charge_id, **update_data)
     return Charge.model_validate(charge)
+
+
+@router.post("/{charge_id}/send-email", status_code=status.HTTP_200_OK)
+async def send_charge_email_by_id(
+    charge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Send an email to the user associated with the charge's contract containing charge information.
+    Only admin users can send charge emails.
+
+    The email includes:
+    - Apartment floor and letter
+    - Period
+    - Rent
+    - Expenses
+    - Municipal tax
+    - Provincial tax
+    - Water bill
+    - Total
+    """
+    return await send_charge_email(db, charge_id)

@@ -11,7 +11,8 @@ def get_charge_by_id(db: Session, charge_id: int) -> ChargeModel | None:
     """Get a charge by ID with contract relationship loaded."""
     return (
         db.query(ChargeModel)
-        .options(joinedload(ChargeModel.contract))
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.user))
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.apartment))
         .filter(ChargeModel.id == charge_id)
         .first()
     )
