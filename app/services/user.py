@@ -172,23 +172,26 @@ def delete_user(db: Session, user_id: int) -> None:
     Delete a user with business logic validation.
 
     - Validates user exists
+    - Validates user is not an admin (cannot delete admin users)
     - Validates user has no contracts (cannot delete users with contracts)
 
     Raises:
         NotFoundError: If user doesn't exist
-        DomainValidationError: If user has contracts
+        DomainValidationError: If user is an admin or has contracts
     """
     # Check if user exists
     user = user_repo.get_user_by_id(db, user_id)
     if not user:
         raise NotFoundError("User not found")
 
+    # Validate user is not an admin
+    if user.role.name == "admin":
+        raise DomainValidationError("Cannot delete user: admin users cannot be deleted")
+
     # Validate user has no contracts
     contracts = contract_repo.get_contracts_by_user_id(db, user_id)
     if contracts:
-        raise DomainValidationError(
-            "Cannot delete user: user has associated contracts"
-        )
+        raise DomainValidationError("Cannot delete user: user has associated contracts")
 
     # Use repository for actual database operation (pure data access)
     user_repo.delete_user(db, user_id)

@@ -805,17 +805,21 @@ def test_delete_user_by_id_admin_can_delete_accountant(
 def test_delete_user_by_id_admin_cannot_delete_self(
     client, db: Session, admin_token: str, admin_user: dict
 ):
-    """Test admin cannot delete themselves (if they have no contracts, they can)."""
-    # Admin can delete themselves if they have no contracts
-    # This is allowed by the current implementation
+    """Test admin cannot delete themselves."""
+    # Admin cannot delete themselves (or any admin user)
     response = client.delete(
         f"/api/v1/users/{admin_user['id']}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    # This will succeed if admin has no contracts, but the token will be invalid after
-    # In practice, this might be prevented by business logic, but the current implementation allows it
-    # We'll test that it works (returns 204) but note that the token becomes invalid
-    assert response.status_code == 204
+    assert response.status_code == 400
+    assert "admin users cannot be deleted" in response.json()["detail"].lower()
+    
+    # Verify user still exists
+    response = client.get(
+        f"/api/v1/users/{admin_user['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
 
 
 def test_delete_user_by_id_multiple_contracts_forbidden(
@@ -856,6 +860,66 @@ def test_delete_user_by_id_multiple_contracts_forbidden(
     # Verify user still exists
     response = client.get(
         f"/api/v1/users/{tenant_user_dict['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_delete_user_by_id_admin_user_forbidden(
+    client, db: Session, admin_token: str, admin_user: dict
+):
+    """Test admin cannot delete any admin user (including other admins)."""
+    # Try to delete the admin user
+    response = client.delete(
+        f"/api/v1/users/{admin_user['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "admin users cannot be deleted" in response.json()["detail"].lower()
+    
+    # Verify user still exists
+    response = client.get(
+        f"/api/v1/users/{admin_user['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_delete_user_by_id_another_admin_user_forbidden(
+    client, db: Session, admin_token: str
+):
+    """Test admin cannot delete another admin user."""
+    from app.core.security import get_password_hash
+    from app.db.models.user import User as UserModel
+    from app.db.models.role import Role as RoleModel
+    
+    # Get admin role
+    admin_role = db.query(RoleModel).filter(RoleModel.name == "admin").first()
+    if not admin_role:
+        raise RuntimeError("Admin role not found")
+    
+    # Create another admin user
+    another_admin = UserModel(
+        email="another_admin@example.com",
+        name="Another Admin",
+        password_hash=get_password_hash("AnotherAdmin123!"),
+        role_id=admin_role.id,
+    )
+    db.add(another_admin)
+    db.commit()
+    db.refresh(another_admin)
+    
+    # Try to delete the other admin user
+    response = client.delete(
+        f"/api/v1/users/{another_admin.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "admin users cannot be deleted" in response.json()["detail"].lower()
+    
+    # Verify user still exists
+    response = client.get(
+        f"/api/v1/users/{another_admin.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
