@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, require_roles
 from app.db.models.user import User
 import app.repositories.apartment as apartment_repo
-from app.services.apartment import delete_apartment, list_apartments_for_user
+from app.services.apartment import create_apartment, delete_apartment, list_apartments_for_user, update_apartment
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 from app.errors import NotFoundError
 
@@ -20,7 +20,7 @@ def create_new_apartment(
     """
     Create a new apartment. Only admin users can create apartments.
     """
-    apartment = apartment_repo.create_apartment(
+    apartment = create_apartment(
         db,
         floor=apartment_data.floor,
         letter=apartment_data.letter,
@@ -73,7 +73,7 @@ def update_apartment_by_id(
     """
     Update an apartment. Only admin users can update apartments.
     """
-    apartment = apartment_repo.update_apartment(
+    apartment = update_apartment(
         db,
         apartment_id=apartment_id,
         floor=apartment_data.floor,
