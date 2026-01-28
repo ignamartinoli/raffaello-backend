@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import app.repositories.contract as contract_repo
 import app.repositories.user as user_repo
 import app.repositories.apartment as apartment_repo
+import app.repositories.charge as charge_repo
 from app.db.models.contract import Contract as ContractModel
 from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
 
@@ -92,6 +93,7 @@ def update_contract(
     - Converts end_month/end_year to last day of month date if provided
     - Validates user exists and has "tenant" role if user_id provided
     - Validates apartment exists if apartment_id provided
+    - Validates no existing charges would be outside new contract date range (if start_date or end_date changes)
     - Validates no duplicate contract for same month+year+apartment (excluding current contract)
 
     Only fields explicitly provided in update_fields will be updated.
@@ -163,6 +165,35 @@ def update_contract(
         apartment = apartment_repo.get_apartment_by_id(db, apartment_id)
         if not apartment:
             raise NotFoundError(f"Apartment with id {apartment_id} not found")
+
+    # Determine final end_date for validation
+    final_end_date = (
+        new_end_date
+        if "end_month" in update_fields or "end_year" in update_fields
+        else existing_contract.end_date
+    )
+
+    # Validate that no existing charges would be outside the new contract date range
+    # if start_date or end_date is being changed
+    if (
+        new_start_date is not None
+        or "end_month" in update_fields
+        or "end_year" in update_fields
+    ):
+        existing_charges = charge_repo.get_charges_by_contract_id(db, contract_id)
+        for charge in existing_charges:
+            # Check if charge period is before final start_date
+            if charge.period < final_start_date:
+                raise DomainValidationError(
+                    f"Cannot update contract: charge for period {charge.period.strftime('%Y-%m-%d')} "
+                    f"would be before contract start date {final_start_date.strftime('%Y-%m-%d')}"
+                )
+            # Check if charge period is after final end_date (if end_date exists)
+            if final_end_date is not None and charge.period > final_end_date:
+                raise DomainValidationError(
+                    f"Cannot update contract: charge for period {charge.period.strftime('%Y-%m-%d')} "
+                    f"would be after contract end date {final_end_date.strftime('%Y-%m-%d')}"
+                )
 
     # Check for duplicate contract if start_date or apartment_id is being changed
     final_apartment_id = (

@@ -1275,3 +1275,316 @@ def test_update_contract_end_year_without_end_month_fails(client, db: Session, a
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 422
+
+
+# ============================================================================
+# CONTRACT UPDATE VALIDATION TESTS (Charge Period Constraints)
+# ============================================================================
+
+
+def test_update_contract_start_date_with_charge_before_new_start_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract start_date to later date when charge exists before new start fails."""
+    from app.services.contract import create_contract
+    
+    # Create contract starting in January 2025
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+    
+    # Create charge for January 2025
+    from app.services.charge import create_charge
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=1,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+    
+    # Try to update contract start_date to March 2025 (charge for January would be before new start)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "start_month": 3,
+            "start_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "would be before contract start date" in response.json()["detail"].lower()
+
+
+def test_update_contract_end_date_with_charge_after_new_end_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract end_date to earlier date when charge exists after new end fails."""
+    from app.services.contract import create_contract
+    
+    # Create contract with end_date (January to June 2025)
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=6,
+        end_year=2025,
+    )
+    
+    # Create charge for June 2025
+    from app.services.charge import create_charge
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=6,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+    
+    # Try to update contract end_date to April 2025 (charge for June would be after new end)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "end_month": 4,
+            "end_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "would be after contract end date" in response.json()["detail"].lower()
+
+
+def test_update_contract_start_date_when_all_charges_within_new_range_success(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract start_date when all charges are within new range succeeds."""
+    from app.services.contract import create_contract
+    
+    # Create contract starting in January 2025
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+    
+    # Create charge for March 2025
+    from app.services.charge import create_charge
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=3,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+    
+    # Update contract start_date to February 2025 (charge for March is still within range)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "start_month": 2,
+            "start_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["start_date"] == "2025-02-01"
+
+
+def test_update_contract_end_date_when_all_charges_within_new_range_success(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract end_date when all charges are within new range succeeds."""
+    from app.services.contract import create_contract
+    
+    # Create contract with end_date (January to June 2025)
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=6,
+        end_year=2025,
+    )
+    
+    # Create charge for March 2025
+    from app.services.charge import create_charge
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=3,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+    
+    # Update contract end_date to May 2025 (charge for March is still within range)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "end_month": 5,
+            "end_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["end_date"] == "2025-05-31"
+
+
+def test_update_contract_clear_end_date_with_charges_success(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test clearing contract end_date when charges exist succeeds (no end_date means ongoing)."""
+    from app.services.contract import create_contract
+    
+    # Create contract with end_date (January to June 2025)
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=6,
+        end_year=2025,
+    )
+    
+    # Create charge for March 2025
+    from app.services.charge import create_charge
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=3,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+    
+    # Clear end_date (set to None) - charge is still within range (no end_date means ongoing)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "end_month": None,
+            "end_year": None,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["end_date"] is None
+
+
+def test_update_contract_start_and_end_date_with_multiple_charges_success(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract dates when all charges are within new range succeeds."""
+    from app.services.contract import create_contract
+    
+    # Create contract (January to December 2025)
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
+    )
+    
+    # Create charges for March, April, and May 2025
+    from app.services.charge import create_charge
+    for month in [3, 4, 5]:
+        create_charge(
+            db,
+            contract_id=contract.id,
+            month=month,
+            year=2025,
+            rent=1000,
+            expenses=200,
+            municipal_tax=50,
+            provincial_tax=30,
+            water_bill=40,
+            is_adjusted=False,
+        )
+    
+    # Update contract to February to June 2025 (all charges still within range)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "start_month": 2,
+            "start_year": 2025,
+            "end_month": 6,
+            "end_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["start_date"] == "2025-02-01"
+    assert data["end_date"] == "2025-06-30"
+
+
+def test_update_contract_start_and_end_date_with_charge_outside_range_fails(client, db: Session, admin_token: str, tenant_user_dict: dict, apartment):
+    """Test updating contract dates when a charge would be outside new range fails."""
+    from app.services.contract import create_contract
+    
+    # Create contract (January to December 2025)
+    contract = create_contract(
+        db,
+        tenant_user_dict["id"],
+        apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=12,
+        end_year=2025,
+    )
+    
+    # Create charges for January, March, and May 2025
+    from app.services.charge import create_charge
+    for month in [1, 3, 5]:
+        create_charge(
+            db,
+            contract_id=contract.id,
+            month=month,
+            year=2025,
+            rent=1000,
+            expenses=200,
+            municipal_tax=50,
+            provincial_tax=30,
+            water_bill=40,
+            is_adjusted=False,
+        )
+    
+    # Try to update contract to February to April 2025 (charge for January would be before new start)
+    response = client.put(
+        f"/api/v1/contracts/{contract.id}",
+        json={
+            "start_month": 2,
+            "start_year": 2025,
+            "end_month": 4,
+            "end_year": 2025,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "would be before contract start date" in response.json()["detail"].lower()
