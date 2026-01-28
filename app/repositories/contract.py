@@ -164,3 +164,13 @@ def get_all_contracts_paginated(
         .all()
     )
     return contracts, total
+
+
+def delete_contract(db: Session, contract_id: int) -> None:
+    """Delete a contract from the database. Pure data access - no business logic."""
+    contract = get_contract_by_id(db, contract_id)
+    if not contract:
+        raise NotFoundError("Contract not found")
+
+    db.delete(contract)
+    db.commit()
