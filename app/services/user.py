@@ -89,13 +89,15 @@ def update_user(
     """
     Update a user with authorization checks and business logic validation.
 
-    - Admin can update any user (email, name, role)
+    - Admin can update any user (email, name, role), but cannot change their own role
     - Tenant and Accountant can only update themselves (email, name, NOT role)
+    - No user can change their own role, regardless of their role
 
     Raises:
         NotFoundError: If user doesn't exist
         DuplicateResourceError: If email is already taken by another user
-        DomainValidationError: If tenant or accountant tries to update another user or modify role
+        DomainValidationError: If tenant or accountant tries to update another user or modify role,
+                              or if any user tries to change their own role
     """
     # Check if user exists
     user = user_repo.get_user_by_id(db, user_id)
@@ -115,6 +117,10 @@ def update_user(
         and user_data.role_id is not None
     ):
         raise DomainValidationError("You cannot modify your role")
+
+    # Prevent users from changing their own role (applies to all roles including admin)
+    if current_user.id == user_id and user_data.role_id is not None:
+        raise DomainValidationError("You cannot change your own role")
 
     # Validate email uniqueness if email is being updated
     if user_data.email is not None and user_data.email != user.email:
