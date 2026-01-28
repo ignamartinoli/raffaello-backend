@@ -268,3 +268,40 @@ async def send_charge_email(db: Session, charge_id: int) -> dict[str, str]:
     return {
         "message": f"Charge email sent successfully to {charge.contract.user.email}"
     }
+
+
+def get_latest_adjusted_charge_by_contract_id(
+    db: Session,
+    contract_id: int,
+) -> ChargeModel:
+    """
+    Get the latest charge with is_adjusted=True for a specific contract.
+
+    Business logic:
+    - Validates contract exists
+    - Retrieves the latest adjusted charge for the contract
+    - Returns the charge if found
+
+    Args:
+        db: Database session
+        contract_id: ID of the contract to get the latest adjusted charge for
+
+    Returns:
+        The latest charge with is_adjusted=True for the contract
+
+    Raises:
+        NotFoundError: If contract not found or no adjusted charge exists for the contract
+    """
+    # Validate contract exists
+    contract = contract_repo.get_contract_by_id(db, contract_id)
+    if not contract:
+        raise NotFoundError(f"Contract with id {contract_id} not found")
+
+    # Get the latest adjusted charge
+    charge = charge_repo.get_latest_adjusted_charge_by_contract_id(db, contract_id)
+    if not charge:
+        raise NotFoundError(
+            f"No adjusted charge found for contract with id {contract_id}"
+        )
+
+    return charge
