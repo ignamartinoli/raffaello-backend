@@ -5,8 +5,35 @@ from sqlalchemy.orm import Session
 import app.repositories.charge as charge_repo
 import app.repositories.contract as contract_repo
 from app.db.models.charge import Charge as ChargeModel
+from app.db.models.contract import Contract as ContractModel
 from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
 from app.services.email import send_charge_email as send_charge_email_service
+
+
+def _validate_charge_period_in_contract_range(
+    period: date, contract: ContractModel
+) -> None:
+    """
+    Validate that a charge period is within the contract's available period range.
+
+    Args:
+        period: The charge period (first day of month)
+        contract: The contract to validate against
+
+    Raises:
+        DomainValidationError: If the period is outside the contract's date range
+    """
+    # Check that period is not before contract start_date
+    if period < contract.start_date:
+        raise DomainValidationError(
+            f"Charge period {period.strftime('%Y-%m-%d')} is before contract start date {contract.start_date.strftime('%Y-%m-%d')}"
+        )
+
+    # Check that period is not after contract end_date (if end_date exists)
+    if contract.end_date is not None and period > contract.end_date:
+        raise DomainValidationError(
+            f"Charge period {period.strftime('%Y-%m-%d')} is after contract end date {contract.end_date.strftime('%Y-%m-%d')}"
+        )
 
 
 def create_charge(
@@ -28,6 +55,7 @@ def create_charge(
 
     - Converts month/year to first of month date
     - Validates contract exists
+    - Validates charge period is within contract's date range
     - Validates no duplicate charge for same contract+period
     """
     # Convert month/year to first of month date
@@ -37,6 +65,9 @@ def create_charge(
     contract = contract_repo.get_contract_by_id(db, contract_id)
     if not contract:
         raise NotFoundError(f"Contract with id {contract_id} not found")
+
+    # Validate charge period is within contract's date range
+    _validate_charge_period_in_contract_range(period, contract)
 
     # Check for duplicate charge (same contract_id and period)
     existing_charge = charge_repo.get_charge_by_contract_and_period(
@@ -73,6 +104,7 @@ def update_charge(
 
     - Converts month/year to first of month date if provided
     - Validates contract exists if contract_id provided
+    - Validates charge period is within contract's date range (if period or contract_id changes)
     - Validates no duplicate charge for same contract+period (excluding current charge)
 
     Only fields explicitly provided in update_fields will be updated.
@@ -100,9 +132,10 @@ def update_charge(
         new_period = date(year, month, 1)
 
     # Validate contract if provided
+    final_contract = None
     if contract_id is not None:
-        contract = contract_repo.get_contract_by_id(db, contract_id)
-        if not contract:
+        final_contract = contract_repo.get_contract_by_id(db, contract_id)
+        if not final_contract:
             raise NotFoundError(f"Contract with id {contract_id} not found")
 
     # Check for duplicate charge if period or contract_id is being changed
@@ -111,8 +144,16 @@ def update_charge(
     )
     final_period = new_period if new_period is not None else existing_charge.period
 
-    # Only check for duplicates if we're changing period or contract_id
+    # Get the contract we'll be using for validation
+    if final_contract is None:
+        final_contract = contract_repo.get_contract_by_id(db, final_contract_id)
+        if not final_contract:
+            raise NotFoundError(f"Contract with id {final_contract_id} not found")
+
+    # Validate charge period is within contract's date range if period or contract_id is being changed
     if new_period is not None or contract_id is not None:
+        _validate_charge_period_in_contract_range(final_period, final_contract)
+
         duplicate_charge = charge_repo.get_charge_by_contract_and_period(
             db, final_contract_id, final_period
         )
