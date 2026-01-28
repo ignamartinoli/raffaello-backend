@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles, get_current_user
-from app.services.charge import create_charge, update_charge, send_charge_email
+from app.services.charge import (
+    create_charge,
+    update_charge,
+    send_charge_email,
+    get_latest_adjusted_charge_by_contract_id,
+)
 import app.repositories.charge as charge_repo
 from app.schemas.charge import Charge, ChargeCreate, ChargeUpdate
 from app.db.models.user import User
@@ -90,6 +95,22 @@ def get_all_charges(
         )
 
     return [Charge.model_validate(charge) for charge in charges]
+
+
+@router.get("/latest-adjusted", response_model=Charge)
+def get_latest_adjusted_charge(
+    contract_id: int = Query(
+        ..., description="Contract ID to get the latest adjusted charge for"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Get the latest charge with is_adjusted=True for a specific contract.
+    Only admin users can access this endpoint.
+    """
+    charge = get_latest_adjusted_charge_by_contract_id(db, contract_id)
+    return Charge.model_validate(charge)
 
 
 @router.get("/{charge_id}", response_model=Charge)

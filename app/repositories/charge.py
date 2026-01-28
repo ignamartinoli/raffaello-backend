@@ -110,6 +110,22 @@ def get_charge_by_contract_and_period(
     )
 
 
+def get_latest_adjusted_charge_by_contract_id(
+    db: Session,
+    contract_id: int,
+) -> ChargeModel | None:
+    """Get the latest charge with is_adjusted=True for a specific contract. Ordered by period descending, then by id descending."""
+    return (
+        db.query(ChargeModel)
+        .filter(
+            ChargeModel.contract_id == contract_id,
+            ChargeModel.is_adjusted == True,
+        )
+        .order_by(ChargeModel.period.desc(), ChargeModel.id.desc())
+        .first()
+    )
+
+
 def create_charge(
     db: Session,
     contract_id: int,
