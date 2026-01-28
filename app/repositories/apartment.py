@@ -1,9 +1,9 @@
 from datetime import date
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 
 from app.db.models.apartment import Apartment as ApartmentModel
 from app.db.models.contract import Contract as ContractModel
+from app.domain.contract_activity import ContractActivityPolicy
 from app.errors import DuplicateResourceError, NotFoundError
 
 
@@ -22,22 +22,17 @@ def get_apartments_with_open_contracts_by_user_id(
 ) -> list[ApartmentModel]:
     """
     Get apartments for which the user has an open contract.
-    An open contract is one where:
-    - start_date <= today (contract has started)
-    - AND (end_date is None OR end_date >= today) (contract hasn't ended)
+    An open contract is defined by the domain-level ContractActivityPolicy.
     """
-    today = date.today()
+    policy = ContractActivityPolicy(as_of=date.today())
     return (
         db.query(ApartmentModel)
         .join(ContractModel, ApartmentModel.id == ContractModel.apartment_id)
         .filter(
             ContractModel.user_id == user_id,
-            and_(
-                ContractModel.start_date <= today,
-                or_(
-                    ContractModel.end_date.is_(None),
-                    ContractModel.end_date >= today,
-                ),
+            policy.sqlalchemy_active_predicate(
+                start_col=ContractModel.start_date,
+                end_col=ContractModel.end_date,
             ),
         )
         .distinct()

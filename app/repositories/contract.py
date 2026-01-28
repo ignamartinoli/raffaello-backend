@@ -1,8 +1,8 @@
 from datetime import date
-from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.db.models.contract import Contract as ContractModel
+from app.domain.contract_activity import ContractActivityPolicy
 from app.errors import NotFoundError
 
 
@@ -116,8 +116,8 @@ def get_all_contracts_paginated(
         page_size: Number of items per page
         user_id: Optional filter by user ID
         apartment_id: Optional filter by apartment ID
-        active: Filter by active status (default True). Active means:
-                start_date <= today AND (end_date IS NULL OR end_date >= today)
+        active: Filter by active status (default True). The "active" definition
+                is a domain rule centralized in ContractActivityPolicy.
 
     Returns:
         Tuple of (list of contracts, total count)
@@ -133,25 +133,19 @@ def get_all_contracts_paginated(
         query = query.filter(ContractModel.apartment_id == apartment_id)
 
     # Apply active filter
-    today = date.today()
+    policy = ContractActivityPolicy(as_of=date.today())
     if active:
-        # Active: start_date <= today AND (end_date IS NULL OR end_date >= today)
         query = query.filter(
-            ContractModel.start_date <= today,
-            or_(
-                ContractModel.end_date.is_(None),
-                ContractModel.end_date >= today,
-            ),
+            policy.sqlalchemy_active_predicate(
+                start_col=ContractModel.start_date,
+                end_col=ContractModel.end_date,
+            )
         )
     else:
-        # Not active: start_date > today OR (end_date IS NOT NULL AND end_date < today)
         query = query.filter(
-            or_(
-                ContractModel.start_date > today,
-                and_(
-                    ContractModel.end_date.isnot(None),
-                    ContractModel.end_date < today,
-                ),
+            policy.sqlalchemy_inactive_predicate(
+                start_col=ContractModel.start_date,
+                end_col=ContractModel.end_date,
             ),
         )
 

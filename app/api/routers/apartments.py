@@ -42,7 +42,7 @@ def get_all_apartments(
     Get all apartments.
     - Admin and Accountant: can see all apartments
     - Tenant: can only see apartments for which they have an open contract
-      (contract where end_date is None or end_date >= today)
+      (as defined by the domain-level ContractActivityPolicy)
     """
     if current_user.role.name in ("admin", "accountant"):
         apartments = apartment_repo.get_all_apartments(db)
