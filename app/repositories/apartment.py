@@ -138,3 +138,13 @@ def update_apartment(
     db.commit()
     db.refresh(apartment)
     return apartment
+
+
+def delete_apartment(db: Session, apartment_id: int) -> None:
+    """Delete an apartment from the database. Pure data access - no business logic."""
+    apartment = get_apartment_by_id(db, apartment_id)
+    if not apartment:
+        raise NotFoundError("Apartment not found")
+
+    db.delete(apartment)
+    db.commit()

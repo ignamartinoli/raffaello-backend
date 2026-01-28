@@ -21,6 +21,15 @@ def get_contracts_by_user_id(db: Session, user_id: int) -> list[ContractModel]:
     return db.query(ContractModel).filter(ContractModel.user_id == user_id).all()
 
 
+def get_contracts_by_apartment_id(
+    db: Session, apartment_id: int
+) -> list[ContractModel]:
+    """Get all contracts for a specific apartment."""
+    return (
+        db.query(ContractModel).filter(ContractModel.apartment_id == apartment_id).all()
+    )
+
+
 def create_contract(
     db: Session,
     user_id: int,

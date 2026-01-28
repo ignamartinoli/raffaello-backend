@@ -1079,3 +1079,230 @@ def test_update_apartment_invalid_letter_empty(client, db: Session, admin_token:
     )
     # Pydantic validates min_length at request parsing level (422)
     assert response.status_code == 422
+
+
+# ============================================================================
+# DELETE APARTMENT TESTS
+# ============================================================================
+
+
+def test_delete_apartment_by_id_as_admin_success(client, db: Session, admin_token: str):
+    """Test admin can delete an apartment without contracts."""
+    from app.repositories.apartment import create_apartment
+    
+    # Create an apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Verify apartment exists
+    response = client.get(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    
+    # Delete the apartment
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 204
+    
+    # Verify apartment is deleted
+    response = client.get(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Apartment not found" in response.json()["detail"]
+
+
+def test_delete_apartment_by_id_as_admin_with_contracts_forbidden(
+    client, db: Session, admin_token: str, tenant_user_dict: dict
+):
+    """Test admin cannot delete an apartment with associated contracts."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create an apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create a contract for the apartment
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+    
+    # Try to delete the apartment
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "associated contracts" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    
+    # Verify apartment still exists
+    response = client.get(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_delete_apartment_by_id_as_tenant_forbidden(
+    client, db: Session, tenant_token: str
+):
+    """Test tenant cannot delete apartments."""
+    from app.repositories.apartment import create_apartment
+    
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_apartment_by_id_as_accountant_forbidden(
+    client, db: Session, accountant_token: str
+):
+    """Test accountant cannot delete apartments."""
+    from app.repositories.apartment import create_apartment
+    
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_apartment_by_id_not_found(client, db: Session, admin_token: str):
+    """Test deleting non-existent apartment returns 404."""
+    response = client.delete(
+        "/api/v1/apartments/99999",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Apartment not found" in response.json()["detail"]
+    assert response.json()["code"] == "NOT_FOUND"
+
+
+def test_delete_apartment_by_id_without_authentication(client, db: Session):
+    """Test deleting apartment without authentication fails."""
+    from app.repositories.apartment import create_apartment
+    
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    response = client.delete(f"/api/v1/apartments/{apartment.id}")
+    assert response.status_code == 401
+
+
+def test_delete_apartment_by_id_multiple_contracts_forbidden(
+    client, db: Session, admin_token: str, tenant_user_dict: dict, another_tenant_user_dict: dict
+):
+    """Test admin cannot delete an apartment with multiple contracts."""
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create an apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create multiple contracts for the apartment (with different users)
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+    create_contract(
+        db,
+        user_id=another_tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=2,
+        start_year=2025,
+    )
+    
+    # Try to delete the apartment
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "associated contracts" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    
+    # Verify apartment still exists
+    response = client.get(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_delete_apartment_by_id_with_closed_contract_forbidden(
+    client, db: Session, admin_token: str, tenant_user_dict: dict
+):
+    """Test admin cannot delete an apartment even if contract is closed (end_date in past)."""
+    from datetime import date
+    from app.repositories.apartment import create_apartment
+    from app.services.contract import create_contract
+    
+    # Create an apartment
+    apartment = create_apartment(db, floor=1, letter="A", is_mine=True)
+    
+    # Create a closed contract (end_date in the past)
+    # Compute both start and end dates from the same reference point (today) to ensure consistency
+    today = date.today()
+    
+    # End date: previous month (ensures contract is closed)
+    if today.month == 1:
+        end_month = 12
+        end_year = today.year - 1
+    else:
+        end_month = today.month - 1
+        end_year = today.year
+    
+    # Start date: at least 3 months before end date to ensure valid contract
+    if end_month <= 3:
+        # If end month is Jan-Mar, start in previous year
+        start_month = 12 - (3 - end_month)
+        start_year = end_year - 1
+    else:
+        # Start 3 months before end date
+        start_month = end_month - 3
+        start_year = end_year
+    
+    create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=start_month,
+        start_year=start_year,
+        end_month=end_month,
+        end_year=end_year,
+    )
+    
+    # Try to delete the apartment (should fail even though contract is closed)
+    response = client.delete(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "associated contracts" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    
+    # Verify apartment still exists
+    response = client.get(
+        f"/api/v1/apartments/{apartment.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200

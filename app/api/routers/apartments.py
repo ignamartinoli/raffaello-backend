@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, require_roles, get_current_user
 from app.db.models.user import User
 import app.repositories.apartment as apartment_repo
+from app.services.apartment import delete_apartment
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 from app.errors import NotFoundError
 
@@ -94,3 +95,17 @@ def update_apartment_by_id(
         water=apartment_data.water,
     )
     return Apartment.model_validate(apartment)
+
+
+@router.delete("/{apartment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_apartment_by_id(
+    apartment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Delete an apartment by ID. Only admin users can delete apartments.
+
+    An apartment can only be deleted if it doesn't have any associated contracts.
+    """
+    delete_apartment(db, apartment_id)
