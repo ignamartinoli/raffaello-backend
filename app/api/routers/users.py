@@ -73,8 +73,9 @@ def update_user_by_id(
     """
     Update a user by ID.
 
-    - Admin can update any user (email, name, role)
+    - Admin can update any user (email, name, role), but cannot change their own role
     - Tenant and Accountant can only update themselves (email, name, NOT role)
+    - No user can change their own role, regardless of their role
     """
     user = update_user(db, user_id, user_data, current_user)
     return User.model_validate(user)

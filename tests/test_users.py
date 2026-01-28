@@ -118,6 +118,42 @@ def test_update_user_by_id_as_admin_success(
     assert data["role"]["id"] == 1
 
 
+def test_update_user_by_id_as_admin_trying_to_change_own_role_forbidden(
+    client, db: Session, admin_token: str, admin_user: dict, tenant_user_dict: dict
+):
+    """Test admin cannot change their own role."""
+    # Use tenant role ID to try to change to
+    tenant_role_id = tenant_user_dict["role_id"]
+    
+    response = client.put(
+        f"/api/v1/users/{admin_user['id']}",
+        json={"role_id": tenant_role_id},  # Trying to change own role
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "You cannot change your own role" in response.json()["detail"]
+
+
+def test_update_user_by_id_as_admin_self_success(
+    client, db: Session, admin_token: str, admin_user: dict
+):
+    """Test admin can update their own user (email, name, but NOT role)."""
+    response = client.put(
+        f"/api/v1/users/{admin_user['id']}",
+        json={
+            "email": "admin_updated@example.com",
+            "name": "Updated Admin Name",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == "admin_updated@example.com"
+    assert data["name"] == "Updated Admin Name"
+    # Role should remain unchanged (admin role)
+    assert data["role"]["id"] == admin_user["role_id"]
+
+
 def test_update_user_by_id_as_admin_partial_update(
     client, db: Session, admin_token: str, tenant_user_dict: dict
 ):
