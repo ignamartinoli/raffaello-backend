@@ -2329,3 +2329,343 @@ def test_update_charge_zero_values_success(client, db: Session, admin_token: str
     assert data["municipal_tax"] == 0
     assert data["provincial_tax"] == 0
     assert data["water_bill"] == 0
+
+
+# ============================================================================
+# SEND CHARGE EMAIL TESTS
+# ============================================================================
+
+
+def test_send_charge_email_as_admin_success(client, db: Session, admin_token: str, contract, tenant_user_dict, apartment):
+    """Test admin can send charge email successfully."""
+    from unittest.mock import patch, AsyncMock
+    
+    # Create a visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Mock the email service function (patch where it's imported in the charge service)
+    with patch("app.services.charge.send_charge_email_service", new_callable=AsyncMock) as mock_send_email:
+        # Send email
+        response = client.post(
+            f"/api/v1/charges/{charge_id}/send-email",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert tenant_user_dict["email"] in data["message"]
+        
+        # Verify email service was called with correct parameters
+        mock_send_email.assert_called_once()
+        call_args = mock_send_email.call_args
+        assert call_args.kwargs["email"] == tenant_user_dict["email"]
+        assert call_args.kwargs["apartment_floor"] == apartment.floor
+        assert call_args.kwargs["apartment_letter"] == apartment.letter
+        assert call_args.kwargs["period"] == "January 2025"
+        assert call_args.kwargs["rent"] == 1000
+        assert call_args.kwargs["expenses"] == 200
+        assert call_args.kwargs["municipal_tax"] == 50
+        assert call_args.kwargs["provincial_tax"] == 30
+        assert call_args.kwargs["water_bill"] == 40
+        assert call_args.kwargs["total"] == 1320  # 1000 + 200 + 50 + 30 + 40
+
+
+def test_send_charge_email_calculates_total_correctly(client, db: Session, admin_token: str, contract):
+    """Test that total is calculated correctly from all charge components."""
+    from unittest.mock import patch, AsyncMock
+    
+    # Create a visible charge with specific amounts
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 3,
+            "year": 2025,
+            "rent": 1500,
+            "expenses": 300,
+            "municipal_tax": 75,
+            "provincial_tax": 45,
+            "water_bill": 60,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Mock the email service function (patch where it's imported in the charge service)
+    with patch("app.services.charge.send_charge_email_service", new_callable=AsyncMock) as mock_send_email:
+        # Send email
+        response = client.post(
+            f"/api/v1/charges/{charge_id}/send-email",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 200
+        
+        # Verify total is calculated correctly
+        call_args = mock_send_email.call_args
+        expected_total = 1500 + 300 + 75 + 45 + 60  # 1980
+        assert call_args.kwargs["total"] == expected_total
+
+
+def test_send_charge_email_formats_period_correctly(client, db: Session, admin_token: str, contract):
+    """Test that period is formatted correctly as 'Month Year'."""
+    from unittest.mock import patch, AsyncMock
+    
+    # Create charges for different months
+    test_cases = [
+        (1, "January 2025"),
+        (6, "June 2025"),
+        (12, "December 2025"),
+    ]
+    
+    for month, expected_period in test_cases:
+        create_response = client.post(
+            "/api/v1/charges",
+            json={
+                "contract_id": contract.id,
+                "month": month,
+                "year": 2025,
+                "rent": 1000,
+                "expenses": 200,
+                "municipal_tax": 50,
+                "provincial_tax": 30,
+                "water_bill": 40,
+                "is_adjusted": False,
+                "is_visible": True,
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert create_response.status_code == 201
+        charge_id = create_response.json()["id"]
+        
+        # Mock the email service function (patch where it's imported in the charge service)
+        with patch("app.services.charge.send_charge_email_service", new_callable=AsyncMock) as mock_send_email:
+            # Send email
+            response = client.post(
+                f"/api/v1/charges/{charge_id}/send-email",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+            assert response.status_code == 200
+            
+            # Verify period format
+            call_args = mock_send_email.call_args
+            assert call_args.kwargs["period"] == expected_period
+
+
+def test_send_charge_email_as_tenant_fails(client, db: Session, admin_token: str, tenant_token: str, contract):
+    """Test tenant cannot send charge emails."""
+    # Create a visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Try to send email as tenant
+    response = client.post(
+        f"/api/v1/charges/{charge_id}/send-email",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_send_charge_email_as_accountant_fails(client, db: Session, admin_token: str, accountant_token: str, contract):
+    """Test accountant cannot send charge emails."""
+    # Create a visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Try to send email as accountant
+    response = client.post(
+        f"/api/v1/charges/{charge_id}/send-email",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_send_charge_email_without_authentication(client, db: Session, admin_token: str, contract):
+    """Test sending charge email without authentication fails."""
+    # Create a visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Try to send email without authentication
+    response = client.post(
+        f"/api/v1/charges/{charge_id}/send-email",
+    )
+    assert response.status_code == 401
+
+
+def test_send_charge_email_charge_not_found(client, db: Session, admin_token: str):
+    """Test sending email for non-existent charge returns 404."""
+    response = client.post(
+        "/api/v1/charges/99999/send-email",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_send_charge_email_smtp_not_configured(client, db: Session, admin_token: str, contract, tenant_user_dict, apartment):
+    """Test sending email when SMTP is not configured raises error."""
+    from unittest.mock import patch
+    
+    # Create a visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": True,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    
+    # Mock the email service to raise ValueError (SMTP not configured)
+    with patch("app.services.charge.send_charge_email_service", side_effect=ValueError("SMTP is not configured. Please configure SMTP settings in .env file.")):
+        # Try to send email
+        response = client.post(
+            f"/api/v1/charges/{charge_id}/send-email",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 400
+        assert "SMTP" in response.json()["detail"] or "not configured" in response.json()["detail"].lower()
+
+
+def test_send_charge_email_not_visible_fails(client, db: Session, admin_token: str, contract):
+    """Test sending email for non-visible charge fails."""
+    # Create a non-visible charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "is_visible": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    assert create_response.json()["is_visible"] is False
+    
+    # Try to send email for non-visible charge
+    response = client.post(
+        f"/api/v1/charges/{charge_id}/send-email",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "not visible" in response.json()["detail"].lower()
+
+
+def test_send_charge_email_not_visible_default_fails(client, db: Session, admin_token: str, contract):
+    """Test sending email for charge with default is_visible=False fails."""
+    # Create a charge without explicitly setting is_visible (defaults to False)
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            # is_visible not provided, defaults to False
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    assert create_response.json()["is_visible"] is False
+    
+    # Try to send email for non-visible charge
+    response = client.post(
+        f"/api/v1/charges/{charge_id}/send-email",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "not visible" in response.json()["detail"].lower()
