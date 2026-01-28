@@ -198,3 +198,13 @@ def update_charge(
     db.commit()
     db.refresh(charge)
     return charge
+
+
+def delete_charge(db: Session, charge_id: int) -> None:
+    """Delete a charge from the database. Pure data access - no business logic."""
+    charge = get_charge_by_id(db, charge_id)
+    if not charge:
+        raise NotFoundError("Charge not found")
+
+    db.delete(charge)
+    db.commit()
