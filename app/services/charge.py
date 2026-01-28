@@ -9,8 +9,78 @@ import app.repositories.contract as contract_repo
 from app.core.config import settings
 from app.db.models.charge import Charge as ChargeModel
 from app.db.models.contract import Contract as ContractModel
-from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
+from app.db.models.user import User
+from app.errors import (
+    DomainValidationError,
+    DuplicateResourceError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.services.email import send_charge_email as send_charge_email_service
+
+
+def list_charges_for_user(
+    db: Session,
+    current_user: User,
+    year: int | None = None,
+    month: int | None = None,
+    unpaid: bool | None = None,
+    apartment_id: int | None = None,
+) -> list[ChargeModel]:
+    """
+    List charges visible to the given user (business access rules).
+
+    - Admin and Accountant: can see all charges
+    - Tenant: can only see visible charges for contracts with their user_id
+    - Other roles: not allowed
+
+    Raises:
+        ForbiddenError: If user role is not allowed.
+    """
+    if current_user.role.name in ("admin", "accountant"):
+        return charge_repo.get_all_charges(
+            db,
+            year=year,
+            month=month,
+            unpaid=unpaid,
+            apartment_id=apartment_id,
+        )
+    if current_user.role.name == "tenant":
+        return charge_repo.get_visible_charges_by_user_id(
+            db,
+            current_user.id,
+            year=year,
+            month=month,
+            unpaid=unpaid,
+            apartment_id=apartment_id,
+        )
+    raise ForbiddenError("Not enough permissions")
+
+
+def get_charge_for_user(
+    db: Session,
+    charge_id: int,
+    current_user: User,
+) -> ChargeModel:
+    """
+    Get a charge by ID if the user is allowed to see it (business access rules).
+
+    - Admin and Accountant: can see any charge
+    - Tenant: can only see visible charges for contracts with their user_id
+
+    Raises:
+        NotFoundError: If charge does not exist.
+        ForbiddenError: If tenant tries to access a charge they are not allowed to see.
+    """
+    charge = charge_repo.get_charge_by_id(db, charge_id)
+    if not charge:
+        raise NotFoundError("Charge not found")
+
+    if current_user.role.name == "tenant":
+        if not charge.is_visible or charge.contract.user_id != current_user.id:
+            raise ForbiddenError("Not enough permissions")
+
+    return charge
 
 
 def _validate_charge_period_in_contract_range(

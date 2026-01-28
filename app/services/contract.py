@@ -7,13 +7,82 @@ import app.repositories.user as user_repo
 import app.repositories.apartment as apartment_repo
 import app.repositories.charge as charge_repo
 from app.db.models.contract import Contract as ContractModel
-from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
+from app.db.models.user import User
+from app.errors import DomainValidationError, DuplicateResourceError, ForbiddenError, NotFoundError
 
 
 def _get_last_day_of_month(year: int, month: int) -> date:
     """Get the last day of the given month and year."""
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, last_day)
+
+
+def list_contracts_for_user(
+    db: Session,
+    current_user: User,
+    page: int = 1,
+    page_size: int = 100,
+    user_id: int | None = None,
+    apartment_id: int | None = None,
+    active: bool = True,
+) -> tuple[list[ContractModel], int]:
+    """
+    List contracts visible to the given user (business access rules).
+
+    - Admin: can see all contracts and use all filters (user_id, apartment_id, active)
+    - Tenant: can only see contracts with their user_id; filters are not allowed
+    - Accountant: not allowed
+
+    Raises:
+        ForbiddenError: If user role is accountant, or tenant uses admin-only filters.
+    """
+    if current_user.role.name == "accountant":
+        raise ForbiddenError("Not enough permissions")
+
+    if current_user.role.name == "tenant":
+        if user_id is not None or apartment_id is not None or active is not True:
+            raise ForbiddenError("Filters are only allowed for admin users")
+        user_id = current_user.id
+        apartment_id = None
+        active = True
+    elif current_user.role.name == "admin":
+        pass  # use provided filters
+    else:
+        raise ForbiddenError("Not enough permissions")
+
+    return contract_repo.get_all_contracts_paginated(
+        db,
+        page=page,
+        page_size=page_size,
+        user_id=user_id,
+        apartment_id=apartment_id,
+        active=active,
+    )
+
+
+def get_contract_for_user(
+    db: Session,
+    contract_id: int,
+    current_user: User,
+) -> ContractModel:
+    """
+    Get a contract by ID if the user is allowed to see it (business access rules).
+
+    - Admin and Accountant: can see any contract
+    - Tenant: can only see contracts with their user_id
+
+    Raises:
+        NotFoundError: If contract does not exist.
+        ForbiddenError: If tenant tries to access another user's contract.
+    """
+    contract = contract_repo.get_contract_by_id(db, contract_id)
+    if not contract:
+        raise NotFoundError("Contract not found")
+
+    if current_user.role.name == "tenant" and contract.user_id != current_user.id:
+        raise ForbiddenError("Not enough permissions")
+
+    return contract
 
 
 def create_contract(

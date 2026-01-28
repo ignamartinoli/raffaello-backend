@@ -4,6 +4,7 @@
 NOT_FOUND = "NOT_FOUND"
 DUPLICATE_RESOURCE = "DUPLICATE_RESOURCE"
 VALIDATION_ERROR = "VALIDATION_ERROR"
+FORBIDDEN = "FORBIDDEN"
 
 
 class DomainError(Exception):
@@ -14,6 +15,12 @@ class DomainError(Exception):
 
 class NotFoundError(DomainError):
     """Raised when a requested resource does not exist."""
+
+    pass
+
+
+class ForbiddenError(DomainError):
+    """Raised when the user is not allowed to perform the action or access the resource."""
 
     pass
 

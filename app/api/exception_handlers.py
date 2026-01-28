@@ -5,10 +5,12 @@ from fastapi.responses import JSONResponse
 
 from app.errors import (
     DUPLICATE_RESOURCE,
+    FORBIDDEN,
     NOT_FOUND,
     VALIDATION_ERROR,
     DomainValidationError,
     DuplicateResourceError,
+    ForbiddenError,
     NotFoundError,
 )
 from app.schemas.error import ErrorResponse
@@ -48,8 +50,17 @@ def not_found_error_handler(_request: Request, exc: NotFoundError) -> JSONRespon
     )
 
 
+def forbidden_error_handler(_request: Request, exc: ForbiddenError) -> JSONResponse:
+    return _error_response(
+        status.HTTP_403_FORBIDDEN,
+        str(exc),
+        FORBIDDEN,
+    )
+
+
 def register_exception_handlers(app):
     """Register domain exception handlers on the FastAPI app."""
     app.add_exception_handler(DomainValidationError, domain_validation_error_handler)
     app.add_exception_handler(DuplicateResourceError, duplicate_resource_error_handler)
+    app.add_exception_handler(ForbiddenError, forbidden_error_handler)
     app.add_exception_handler(NotFoundError, not_found_error_handler)
