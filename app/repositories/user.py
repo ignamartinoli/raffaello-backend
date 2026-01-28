@@ -124,3 +124,13 @@ def get_all_users_paginated(
     skip = (page - 1) * page_size
     users = query.order_by(UserModel.name).offset(skip).limit(page_size).all()
     return users, total
+
+
+def delete_user(db: Session, user_id: int) -> None:
+    """Delete a user from the database. Pure data access - no business logic."""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise NotFoundError("User not found")
+
+    db.delete(user)
+    db.commit()
