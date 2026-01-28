@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_roles, get_current_user
+from app.api.deps import get_db, require_roles
 from app.db.models.user import User
 import app.repositories.apartment as apartment_repo
-from app.services.apartment import delete_apartment
+from app.services.apartment import delete_apartment, list_apartments_for_user
 from app.schemas.apartment import Apartment, ApartmentCreate, ApartmentUpdate
 from app.errors import NotFoundError
 
@@ -36,7 +36,7 @@ def create_new_apartment(
 @router.get("", response_model=list[Apartment])
 def get_all_apartments(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("admin", "accountant", "tenant")),
 ):
     """
     Get all apartments.
@@ -44,17 +44,7 @@ def get_all_apartments(
     - Tenant: can only see apartments for which they have an open contract
       (as defined by the domain-level ContractActivityPolicy)
     """
-    if current_user.role.name in ("admin", "accountant"):
-        apartments = apartment_repo.get_all_apartments(db)
-    elif current_user.role.name == "tenant":
-        apartments = apartment_repo.get_apartments_with_open_contracts_by_user_id(
-            db, current_user.id
-        )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
-        )
+    apartments = list_apartments_for_user(db, current_user)
     return [Apartment.model_validate(apt) for apt in apartments]
 
 
