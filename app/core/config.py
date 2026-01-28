@@ -26,11 +26,16 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
     smtp_from_email: str | None = Field(default=None, alias="SMTP_FROM_EMAIL")
-    
+
     # Frontend URL for password reset links
     frontend_url: str | None = Field(default=None, alias="FRONTEND_URL")
 
-    @field_validator("smtp_host", "smtp_user", "smtp_password", "smtp_from_email", mode="before")
+    # RapidAPI Configuration
+    rapidapi_key: str | None = Field(default=None, alias="RAPIDAPI_KEY")
+
+    @field_validator(
+        "smtp_host", "smtp_user", "smtp_password", "smtp_from_email", mode="before"
+    )
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         """Convert empty strings to None for optional string fields."""

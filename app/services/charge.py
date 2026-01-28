@@ -1,9 +1,12 @@
 import calendar
+import math
 from datetime import date
 from sqlalchemy.orm import Session
+import httpx
 
 import app.repositories.charge as charge_repo
 import app.repositories.contract as contract_repo
+from app.core.config import settings
 from app.db.models.charge import Charge as ChargeModel
 from app.db.models.contract import Contract as ContractModel
 from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
@@ -324,3 +327,112 @@ def delete_charge(db: Session, charge_id: int) -> None:
         )
 
     charge_repo.delete_charge(db, charge_id)
+
+
+async def estimate_adjustment_by_contract_id(
+    db: Session,
+    contract_id: int,
+) -> int:
+    """
+    Estimate the adjustment for a contract by calling RapidAPI.
+
+    Business logic:
+    - Validates contract exists
+    - Gets the latest adjusted charge for the contract
+    - Validates RapidAPI key is configured
+    - Validates contract has adjustment_months set
+    - Calls RapidAPI to calculate the adjustment
+    - Extracts the amount from the last item in the data array
+    - Returns the amount rounded up
+
+    Args:
+        db: Database session
+        contract_id: ID of the contract to estimate adjustment for
+
+    Returns:
+        The adjusted amount rounded up (integer)
+
+    Raises:
+        NotFoundError: If contract not found or no adjusted charge exists
+        DomainValidationError: If RapidAPI key is not configured, contract doesn't have adjustment_months, or API response is invalid
+    """
+    # Validate contract exists
+    contract = contract_repo.get_contract_by_id(db, contract_id)
+    if not contract:
+        raise NotFoundError(f"Contract with id {contract_id} not found")
+
+    # Validate RapidAPI key is configured
+    if not settings.rapidapi_key:
+        raise DomainValidationError(
+            "RapidAPI key is not configured. Please configure RAPIDAPI_KEY in .env file."
+        )
+
+    # Validate contract has adjustment_months set
+    if contract.adjustment_months is None:
+        raise DomainValidationError(
+            f"Contract with id {contract_id} does not have adjustment_months configured"
+        )
+
+    # Get the latest adjusted charge
+    charge = get_latest_adjusted_charge_by_contract_id(db, contract_id)
+
+    # Prepare the request body for RapidAPI
+    request_body = {
+        "amount": charge.rent,
+        "date": charge.period.strftime("%Y-%m-%d"),
+        "months": contract.adjustment_months,
+        "rate": "ipc",
+    }
+
+    # Call RapidAPI
+    headers = {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": "arquilerapi1.p.rapidapi.com",
+        "x-rapidapi-key": settings.rapidapi_key,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://arquilerapi1.p.rapidapi.com/calculate",
+                json=request_body,
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            api_response = response.json()
+
+            # Validate response structure
+            if not isinstance(api_response, dict) or "data" not in api_response:
+                raise DomainValidationError(
+                    "Invalid response from RapidAPI: missing 'data' field"
+                )
+
+            data = api_response.get("data", [])
+            if not isinstance(data, list) or len(data) == 0:
+                raise DomainValidationError(
+                    "Invalid response from RapidAPI: 'data' is empty or not a list"
+                )
+
+            # Get the last item from the data array
+            last_item = data[-1]
+            if not isinstance(last_item, dict) or "amount" not in last_item:
+                raise DomainValidationError(
+                    "Invalid response from RapidAPI: last item in 'data' missing 'amount' field"
+                )
+
+            # Extract amount and round up
+            amount = last_item["amount"]
+            if not isinstance(amount, (int, float)):
+                raise DomainValidationError(
+                    "Invalid response from RapidAPI: 'amount' is not a number"
+                )
+
+            return math.ceil(amount)
+
+    except httpx.HTTPStatusError as e:
+        raise DomainValidationError(
+            f"RapidAPI request failed with status {e.response.status_code}: {e.response.text}"
+        )
+    except httpx.RequestError as e:
+        raise DomainValidationError(f"RapidAPI request failed: {str(e)}")

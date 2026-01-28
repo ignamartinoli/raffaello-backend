@@ -8,6 +8,7 @@ from app.services.charge import (
     delete_charge,
     send_charge_email,
     get_latest_adjusted_charge_by_contract_id,
+    estimate_adjustment_by_contract_id,
 )
 import app.repositories.charge as charge_repo
 from app.schemas.charge import Charge, ChargeCreate, ChargeUpdate
@@ -112,6 +113,29 @@ def get_latest_adjusted_charge(
     """
     charge = get_latest_adjusted_charge_by_contract_id(db, contract_id)
     return Charge.model_validate(charge)
+
+
+@router.post("/estimate-adjustment")
+async def estimate_adjustment(
+    contract_id: int = Query(
+        ..., description="Contract ID to estimate adjustment for"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Estimate the adjustment for a contract by calling RapidAPI.
+    Only admin users can access this endpoint.
+    
+    This endpoint:
+    - Gets the latest adjusted charge for the contract
+    - Uses the charge's rent and period
+    - Uses the contract's adjustment_months
+    - Calls RapidAPI to calculate the estimated adjustment
+    - Returns the value from the last item in the data array, rounded up
+    """
+    value = await estimate_adjustment_by_contract_id(db, contract_id)
+    return {"value": value}
 
 
 @router.get("/{charge_id}", response_model=Charge)
