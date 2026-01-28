@@ -305,3 +305,22 @@ def get_latest_adjusted_charge_by_contract_id(
         )
 
     return charge
+
+
+def delete_charge(db: Session, charge_id: int) -> None:
+    """
+    Delete a charge with business logic validation.
+
+    - Validates charge exists (raises NotFoundError if not)
+    - Validates charge is not paid (raises DomainValidationError if payment_date is set)
+    """
+    charge = charge_repo.get_charge_by_id(db, charge_id)
+    if not charge:
+        raise NotFoundError("Charge not found")
+
+    if charge.payment_date is not None:
+        raise DomainValidationError(
+            "Cannot delete charge: charge has been paid (payment_date is set)"
+        )
+
+    charge_repo.delete_charge(db, charge_id)

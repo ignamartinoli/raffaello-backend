@@ -3529,3 +3529,240 @@ def test_get_latest_adjusted_charge_same_period_returns_latest_by_id(
     # Should return April (latest by period)
     assert data["id"] == adjusted_apr_id
     assert data["period"] == "2025-04-01"
+
+
+# ============================================================================
+# DELETE CHARGE TESTS
+# ============================================================================
+
+
+def test_delete_charge_by_id_as_admin_success(
+    client, db: Session, admin_token: str, contract
+):
+    """Test admin can delete an unpaid charge."""
+    # Create an unpaid charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+
+    # Verify charge exists
+    response = client.get(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+    # Delete the charge
+    response = client.delete(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 204
+
+    # Verify charge is deleted
+    response = client.get(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Charge not found" in response.json()["detail"]
+
+
+def test_delete_charge_by_id_as_admin_with_paid_charge_forbidden(
+    client, db: Session, admin_token: str, contract
+):
+    """Test admin cannot delete a paid charge."""
+    # Create a paid charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+            "payment_date": "2025-01-15",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    assert create_response.json()["payment_date"] == "2025-01-15"
+
+    # Try to delete the paid charge
+    response = client.delete(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "paid" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+    # Verify charge still exists
+    response = client.get(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["payment_date"] == "2025-01-15"
+
+
+def test_delete_charge_by_id_as_tenant_forbidden(
+    client, db: Session, tenant_token: str, contract
+):
+    """Test tenant cannot delete charges."""
+    # Create an unpaid charge using service (tenant cannot create via API)
+    from app.services.charge import create_charge
+
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=1,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+
+    # Try to delete as tenant
+    response = client.delete(
+        f"/api/v1/charges/{charge.id}",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_charge_by_id_as_accountant_forbidden(
+    client, db: Session, accountant_token: str, contract
+):
+    """Test accountant cannot delete charges."""
+    # Create an unpaid charge using service
+    from app.services.charge import create_charge
+
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=1,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+
+    # Try to delete as accountant
+    response = client.delete(
+        f"/api/v1/charges/{charge.id}",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_charge_by_id_not_found(client, db: Session, admin_token: str):
+    """Test deleting non-existent charge returns 404."""
+    response = client.delete(
+        "/api/v1/charges/99999",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Charge not found" in response.json()["detail"]
+    assert response.json()["code"] == "NOT_FOUND"
+
+
+def test_delete_charge_by_id_without_authentication(client, db: Session, contract):
+    """Test deleting charge without authentication fails."""
+    # Create an unpaid charge using service
+    from app.services.charge import create_charge
+
+    charge = create_charge(
+        db,
+        contract_id=contract.id,
+        month=1,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+
+    response = client.delete(f"/api/v1/charges/{charge.id}")
+    assert response.status_code == 401
+
+
+def test_delete_charge_by_id_unpaid_charge_with_payment_date_set_via_update(
+    client, db: Session, admin_token: str, contract
+):
+    """Test that a charge that was unpaid but then had payment_date set via update cannot be deleted."""
+    # Create an unpaid charge
+    create_response = client.post(
+        "/api/v1/charges",
+        json={
+            "contract_id": contract.id,
+            "month": 1,
+            "year": 2025,
+            "rent": 1000,
+            "expenses": 200,
+            "municipal_tax": 50,
+            "provincial_tax": 30,
+            "water_bill": 40,
+            "is_adjusted": False,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_response.status_code == 201
+    charge_id = create_response.json()["id"]
+    assert create_response.json()["payment_date"] is None
+
+    # Set payment_date via update
+    update_response = client.put(
+        f"/api/v1/charges/{charge_id}",
+        json={
+            "payment_date": "2025-01-20",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["payment_date"] == "2025-01-20"
+
+    # Try to delete the now-paid charge
+    response = client.delete(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "paid" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+    # Verify charge still exists
+    response = client.get(
+        f"/api/v1/charges/{charge_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200

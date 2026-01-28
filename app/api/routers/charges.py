@@ -5,6 +5,7 @@ from app.api.deps import get_db, require_roles, get_current_user
 from app.services.charge import (
     create_charge,
     update_charge,
+    delete_charge,
     send_charge_email,
     get_latest_adjusted_charge_by_contract_id,
 )
@@ -155,6 +156,20 @@ def update_charge_by_id(
     update_data = charge_data.model_dump(exclude_unset=True)
     charge = update_charge(db, charge_id=charge_id, **update_data)
     return Charge.model_validate(charge)
+
+
+@router.delete("/{charge_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_charge_by_id(
+    charge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Delete a charge by ID. Only admin users can delete charges.
+
+    A charge can only be deleted if it has not been paid (payment_date is None).
+    """
+    delete_charge(db, charge_id)
 
 
 @router.post("/{charge_id}/send-email", status_code=status.HTTP_200_OK)
