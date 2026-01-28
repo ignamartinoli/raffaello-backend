@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user, require_roles
 from app.db.models.user import User as UserModel
-from app.services.user import create_user, get_user, update_user, get_all_users
+from app.services.user import create_user, get_user, update_user, get_all_users, delete_user
 from app.schemas.user import UserCreate, User, UserUpdate
 from app.schemas.pagination import PaginatedResponse
 
@@ -79,3 +79,17 @@ def update_user_by_id(
     """
     user = update_user(db, user_id, user_data, current_user)
     return User.model_validate(user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_by_id(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_roles("admin")),
+):
+    """
+    Delete a user by ID. Only admin users can delete users.
+
+    A user can only be deleted if they have no associated contracts.
+    """
+    delete_user(db, user_id)

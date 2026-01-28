@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 import app.repositories.user as user_repo
+import app.repositories.contract as contract_repo
 from app.db.models.role import Role as RoleModel
 from app.db.models.user import User as UserModel
 from app.errors import DomainValidationError, DuplicateResourceError, NotFoundError
@@ -164,3 +165,30 @@ def get_all_users(
     return user_repo.get_all_users_paginated(
         db, page=page, page_size=page_size, name=name
     )
+
+
+def delete_user(db: Session, user_id: int) -> None:
+    """
+    Delete a user with business logic validation.
+
+    - Validates user exists
+    - Validates user has no contracts (cannot delete users with contracts)
+
+    Raises:
+        NotFoundError: If user doesn't exist
+        DomainValidationError: If user has contracts
+    """
+    # Check if user exists
+    user = user_repo.get_user_by_id(db, user_id)
+    if not user:
+        raise NotFoundError("User not found")
+
+    # Validate user has no contracts
+    contracts = contract_repo.get_contracts_by_user_id(db, user_id)
+    if contracts:
+        raise DomainValidationError(
+            "Cannot delete user: user has associated contracts"
+        )
+
+    # Use repository for actual database operation (pure data access)
+    user_repo.delete_user(db, user_id)
