@@ -227,3 +227,23 @@ def update_contract(
 
     # Use repository for actual database operation
     return contract_repo.update_contract(db, contract_id=contract_id, **update_dict)
+
+
+def delete_contract(db: Session, contract_id: int) -> None:
+    """
+    Delete a contract with business logic validation.
+
+    - Validates contract exists (raises NotFoundError if not)
+    - Validates contract has no associated charges (raises DomainValidationError if any exist)
+    """
+    contract = contract_repo.get_contract_by_id(db, contract_id)
+    if not contract:
+        raise NotFoundError("Contract not found")
+
+    charges = charge_repo.get_charges_by_contract_id(db, contract_id)
+    if charges:
+        raise DomainValidationError(
+            "Cannot delete contract: contract has associated charges"
+        )
+
+    contract_repo.delete_contract(db, contract_id)

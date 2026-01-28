@@ -1588,3 +1588,202 @@ def test_update_contract_start_and_end_date_with_charge_outside_range_fails(clie
     )
     assert response.status_code == 400
     assert "would be before contract start date" in response.json()["detail"].lower()
+
+
+# ============================================================================
+# DELETE CONTRACT TESTS
+# ============================================================================
+
+
+def test_delete_contract_by_id_as_admin_success(
+    client, db: Session, admin_token: str, tenant_user_dict: dict, apartment
+):
+    """Test admin can delete a contract without charges."""
+    from app.services.contract import create_contract
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+
+    response = client.get(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+    response = client.delete(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 204
+
+    response = client.get(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Contract not found" in response.json()["detail"]
+
+
+def test_delete_contract_by_id_as_admin_with_charges_forbidden(
+    client, db: Session, admin_token: str, tenant_user_dict: dict, apartment
+):
+    """Test admin cannot delete a contract with associated charges."""
+    from app.services.contract import create_contract
+    from app.services.charge import create_charge
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+    create_charge(
+        db,
+        contract_id=contract.id,
+        month=1,
+        year=2025,
+        rent=1000,
+        expenses=200,
+        municipal_tax=50,
+        provincial_tax=30,
+        water_bill=40,
+        is_adjusted=False,
+    )
+
+    response = client.delete(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "associated charges" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+    response = client.get(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+
+def test_delete_contract_by_id_as_tenant_forbidden(
+    client, db: Session, tenant_token: str, tenant_user_dict: dict, apartment
+):
+    """Test tenant cannot delete contracts."""
+    from app.services.contract import create_contract
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+
+    response = client.delete(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {tenant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_contract_by_id_as_accountant_forbidden(
+    client, db: Session, accountant_token: str, tenant_user_dict: dict, apartment
+):
+    """Test accountant cannot delete contracts."""
+    from app.services.contract import create_contract
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+
+    response = client.delete(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {accountant_token}"},
+    )
+    assert response.status_code == 403
+    assert "Not enough permissions" in response.json()["detail"]
+
+
+def test_delete_contract_by_id_not_found(client, db: Session, admin_token: str):
+    """Test deleting non-existent contract returns 404."""
+    response = client.delete(
+        "/api/v1/contracts/99999",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert "Contract not found" in response.json()["detail"]
+    assert response.json()["code"] == "NOT_FOUND"
+
+
+def test_delete_contract_by_id_without_authentication(
+    client, db: Session, tenant_user_dict: dict, apartment
+):
+    """Test deleting contract without authentication fails."""
+    from app.services.contract import create_contract
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+    )
+
+    response = client.delete(f"/api/v1/contracts/{contract.id}")
+    assert response.status_code == 401
+
+
+def test_delete_contract_by_id_multiple_charges_forbidden(
+    client, db: Session, admin_token: str, tenant_user_dict: dict, apartment
+):
+    """Test admin cannot delete a contract with multiple charges."""
+    from app.services.contract import create_contract
+    from app.services.charge import create_charge
+
+    contract = create_contract(
+        db,
+        user_id=tenant_user_dict["id"],
+        apartment_id=apartment.id,
+        start_month=1,
+        start_year=2025,
+        end_month=3,
+        end_year=2025,
+    )
+    for month in [1, 2, 3]:
+        create_charge(
+            db,
+            contract_id=contract.id,
+            month=month,
+            year=2025,
+            rent=1000,
+            expenses=200,
+            municipal_tax=50,
+            provincial_tax=30,
+            water_bill=40,
+            is_adjusted=False,
+        )
+
+    response = client.delete(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400
+    assert "associated charges" in response.json()["detail"].lower()
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+    response = client.get(
+        f"/api/v1/contracts/{contract.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles, get_current_user
-from app.services.contract import create_contract, update_contract
+from app.services.contract import create_contract, update_contract, delete_contract
 import app.repositories.contract as contract_repo
 from app.schemas.contract import Contract, ContractCreate, ContractUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -143,3 +143,17 @@ def update_contract_by_id(
     update_data = contract_data.model_dump(exclude_unset=True)
     contract = update_contract(db, contract_id=contract_id, **update_data)
     return Contract.model_validate(contract)
+
+
+@router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract_by_id(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
+):
+    """
+    Delete a contract by ID. Only admin users can delete contracts.
+
+    A contract can only be deleted if it has no associated charges.
+    """
+    delete_contract(db, contract_id)
