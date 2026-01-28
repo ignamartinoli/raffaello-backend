@@ -5,6 +5,7 @@ NOT_FOUND = "NOT_FOUND"
 DUPLICATE_RESOURCE = "DUPLICATE_RESOURCE"
 VALIDATION_ERROR = "VALIDATION_ERROR"
 FORBIDDEN = "FORBIDDEN"
+UNAUTHORIZED = "UNAUTHORIZED"
 
 
 class DomainError(Exception):
@@ -21,6 +22,12 @@ class NotFoundError(DomainError):
 
 class ForbiddenError(DomainError):
     """Raised when the user is not allowed to perform the action or access the resource."""
+
+    pass
+
+
+class UnauthorizedError(DomainError):
+    """Raised when authentication fails (invalid or missing credentials)."""
 
     pass
 
