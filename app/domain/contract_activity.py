@@ -18,11 +18,15 @@ class ContractActivityPolicy:
     as_of: date
 
     def is_active(self, *, start_date: date, end_date: date | None) -> bool:
-        return (start_date <= self.as_of) and (end_date is None or end_date >= self.as_of)
+        return (start_date <= self.as_of) and (
+            end_date is None or end_date >= self.as_of
+        )
 
     def is_inactive(self, *, start_date: date, end_date: date | None) -> bool:
         # Negation of the active rule, expressed in a query-friendly way.
-        return (start_date > self.as_of) or (end_date is not None and end_date < self.as_of)
+        return (start_date > self.as_of) or (
+            end_date is not None and end_date < self.as_of
+        )
 
     def sqlalchemy_active_predicate(self, *, start_col, end_col):
         """Build a SQLAlchemy predicate implementing the active rule.
@@ -51,4 +55,3 @@ class ContractActivityPolicy:
                 end_col < self.as_of,
             ),
         )
-
