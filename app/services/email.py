@@ -1,7 +1,5 @@
 import logging
-import aiosmtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 
 from app.core.config import settings
 
@@ -16,28 +14,25 @@ async def send_password_reset_email(email: str, reset_token: str) -> None:
         email: User's email address
         reset_token: JWT token for password reset
     """
-    if not all(
-        [
-            settings.smtp_host,
-            settings.smtp_port,
-            settings.smtp_user,
-            settings.smtp_password,
-            settings.smtp_from_email,
-        ]
-    ):
-        # SMTP not configured - log or raise error
+    if not settings.resend_api_key or not settings.resend_from_email:
+        missing = []
+        if not settings.resend_api_key:
+            missing.append("RESEND_API_KEY")
+        if not settings.resend_from_email:
+            missing.append("RESEND_FROM_EMAIL")
+        
         logger.warning(
-            f"SMTP not configured - cannot send password reset email to {email}"
+            f"Resend not configured - cannot send password reset email to {email}. "
+            f"Missing: {', '.join(missing)}"
         )
         raise ValueError(
-            "SMTP is not configured. Please configure SMTP settings in .env file."
+            f"Resend is not configured. Missing environment variables: {', '.join(missing)}. "
+            f"Please configure RESEND_API_KEY and RESEND_FROM_EMAIL in your environment variables. "
+            f"Note: On Railway, set these in the Railway dashboard, not just in .env file."
         )
 
-    # Create email message
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "Password Reset Request"
-    message["From"] = settings.smtp_from_email
-    message["To"] = email
+    # Initialize Resend client
+    resend.api_key = settings.resend_api_key
 
     # Build email content based on FRONTEND_URL configuration
     if settings.frontend_url:
@@ -93,40 +88,19 @@ If you did not request this, please ignore this email.
 </html>
         """
 
-    # Attach parts
-    part1 = MIMEText(text, "plain")
-    part2 = MIMEText(html, "html")
-    message.attach(part1)
-    message.attach(part2)
-
-    # Send email
-    send_kwargs = {
-        "hostname": settings.smtp_host,
-        "port": settings.smtp_port,
-        "username": settings.smtp_user,
-        "password": settings.smtp_password,
-    }
-
-    # Handle TLS based on smtp_use_tls configuration
-    if settings.smtp_use_tls:
-        # Port 587 uses STARTTLS, port 465 uses direct TLS
-        if settings.smtp_port == 587:
-            send_kwargs["start_tls"] = True
-        elif settings.smtp_port == 465:
-            send_kwargs["use_tls"] = True
-        else:
-            # For non-standard ports, default to STARTTLS if TLS is enabled
-            send_kwargs["start_tls"] = True
-
     try:
-        await aiosmtplib.send(message, **send_kwargs)
+        resend.Emails.send({
+            "from": settings.resend_from_email,
+            "to": email,
+            "subject": "Password Reset Request",
+            "text": text.strip(),
+            "html": html.strip(),
+        })
     except Exception as e:
         logger.exception(
-            "Failed to send password reset email to %s: %s (host=%s, port=%s)",
+            "Failed to send password reset email to %s: %s",
             email,
             e,
-            settings.smtp_host,
-            settings.smtp_port,
         )
         raise
 
@@ -158,28 +132,25 @@ async def send_charge_email(
         water_bill: Water bill amount
         total: Total amount (rent + expenses + municipal_tax + provincial_tax + water_bill)
     """
-    if not all(
-        [
-            settings.smtp_host,
-            settings.smtp_port,
-            settings.smtp_user,
-            settings.smtp_password,
-            settings.smtp_from_email,
-        ]
-    ):
-        # SMTP not configured - log or raise error
-        logger.warning(f"SMTP not configured - cannot send charge email to {email}")
+    if not settings.resend_api_key or not settings.resend_from_email:
+        missing = []
+        if not settings.resend_api_key:
+            missing.append("RESEND_API_KEY")
+        if not settings.resend_from_email:
+            missing.append("RESEND_FROM_EMAIL")
+        
+        logger.warning(
+            f"Resend not configured - cannot send charge email to {email}. "
+            f"Missing: {', '.join(missing)}"
+        )
         raise ValueError(
-            "SMTP is not configured. Please configure SMTP settings in .env file."
+            f"Resend is not configured. Missing environment variables: {', '.join(missing)}. "
+            f"Please configure RESEND_API_KEY and RESEND_FROM_EMAIL in your environment variables. "
+            f"Note: On Railway, set these in the Railway dashboard, not just in .env file."
         )
 
-    # Create email message
-    message = MIMEMultipart("alternative")
-    message["Subject"] = (
-        f"Charge Statement - Apartment {apartment_floor}{apartment_letter} - {period}"
-    )
-    message["From"] = settings.smtp_from_email
-    message["To"] = email
+    # Initialize Resend client
+    resend.api_key = settings.resend_api_key
 
     # Format amounts with thousands separator
     def format_amount(amount: int) -> str:
@@ -242,39 +213,18 @@ Please contact us if you have any questions.
 </html>
     """
 
-    # Attach parts
-    part1 = MIMEText(text, "plain")
-    part2 = MIMEText(html, "html")
-    message.attach(part1)
-    message.attach(part2)
-
-    # Send email
-    send_kwargs = {
-        "hostname": settings.smtp_host,
-        "port": settings.smtp_port,
-        "username": settings.smtp_user,
-        "password": settings.smtp_password,
-    }
-
-    # Handle TLS based on smtp_use_tls configuration
-    if settings.smtp_use_tls:
-        # Port 587 uses STARTTLS, port 465 uses direct TLS
-        if settings.smtp_port == 587:
-            send_kwargs["start_tls"] = True
-        elif settings.smtp_port == 465:
-            send_kwargs["use_tls"] = True
-        else:
-            # For non-standard ports, default to STARTTLS if TLS is enabled
-            send_kwargs["start_tls"] = True
-
     try:
-        await aiosmtplib.send(message, **send_kwargs)
+        resend.Emails.send({
+            "from": settings.resend_from_email,
+            "to": email,
+            "subject": f"Charge Statement - Apartment {apartment_floor}{apartment_letter} - {period}",
+            "text": text.strip(),
+            "html": html.strip(),
+        })
     except Exception as e:
         logger.exception(
-            "Failed to send charge email to %s: %s (host=%s, port=%s)",
+            "Failed to send charge email to %s: %s",
             email,
             e,
-            settings.smtp_host,
-            settings.smtp_port,
         )
         raise
