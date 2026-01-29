@@ -118,7 +118,17 @@ If you did not request this, please ignore this email.
             # For non-standard ports, default to STARTTLS if TLS is enabled
             send_kwargs["start_tls"] = True
 
-    await aiosmtplib.send(message, **send_kwargs)
+    try:
+        await aiosmtplib.send(message, **send_kwargs)
+    except Exception as e:
+        logger.exception(
+            "Failed to send password reset email to %s: %s (host=%s, port=%s)",
+            email,
+            e,
+            settings.smtp_host,
+            settings.smtp_port,
+        )
+        raise
 
 
 async def send_charge_email(
@@ -257,4 +267,14 @@ Please contact us if you have any questions.
             # For non-standard ports, default to STARTTLS if TLS is enabled
             send_kwargs["start_tls"] = True
 
-    await aiosmtplib.send(message, **send_kwargs)
+    try:
+        await aiosmtplib.send(message, **send_kwargs)
+    except Exception as e:
+        logger.exception(
+            "Failed to send charge email to %s: %s (host=%s, port=%s)",
+            email,
+            e,
+            settings.smtp_host,
+            settings.smtp_port,
+        )
+        raise
