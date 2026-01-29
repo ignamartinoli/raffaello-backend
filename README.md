@@ -73,6 +73,8 @@ Raffaello is a role-based management system focused on the **financial operation
 - Manage users and roles
 - Create and manage apartments
 - Manage contracts, charges, and payments
+- Send charge notification via email
+- Auto-update adjustment with the Arquiler API
 
 **Residents**
 - View their apartment details
