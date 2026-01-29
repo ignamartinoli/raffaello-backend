@@ -82,7 +82,6 @@ Raffaello is a role-based management system focused on the **financial operation
 **Accountant**
 - View payment status across apartments
 - Identify unpaid charges
-- Support expense rate updates
 
 ---
 
