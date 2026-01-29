@@ -185,20 +185,16 @@ Add to `app/core/config.py` (all from .env file):
 - `ALGORITHM`: str (required, e.g., "HS256")
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: int (required)
 - `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES`: int = 60 (optional, can have default)
-- `SMTP_HOST`: str (required for email)
-- `SMTP_PORT`: int (required for email)
-- `SMTP_USER`: str (required for email)
-- `SMTP_PASSWORD`: str (required for email)
-- `SMTP_USE_TLS`: bool = True (optional)
-- `SMTP_FROM_EMAIL`: str (required for email, sender address)
+- `RESEND_API_KEY`: str (required for email)
+- `RESEND_FROM_EMAIL`: str (required for email, sender address)
 
 ## 7. Email Service (For Password Recovery)
 
-### ✅ DECISION: SMTP
-- Using `aiosmtplib` or `smtplib` for email sending
-- Configure SMTP server in settings (.env file)
+### ✅ DECISION: Resend
+- Using `resend` Python SDK for email sending
+- Configure Resend API key in settings (.env file)
 - Send plain text or HTML emails
-- SMTP settings: HOST, PORT, USER, PASSWORD, USE_TLS, FROM_EMAIL
+- Resend settings: API_KEY, FROM_EMAIL
 
 ## 8. Middleware & Dependencies
 
@@ -342,21 +338,17 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 FIRST_ADMIN_EMAIL=admin@example.com
 FIRST_ADMIN_PASSWORD=YourSecurePassword123!
 
-# SMTP Configuration
-SMTP_HOST=smtp.gmail.com  # or your SMTP server
-SMTP_PORT=587  # 587 for TLS, 465 for SSL
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password  # Use app password for Gmail
-SMTP_USE_TLS=true  # true for port 587, false for port 465 with SSL
-SMTP_FROM_EMAIL=noreply@yourdomain.com  # Sender email address
+# Resend Configuration
+RESEND_API_KEY=re_xxxxxxxxxxxxx  # Get from https://resend.com/api-keys
+RESEND_FROM_EMAIL=noreply@yourdomain.com  # Must be a verified domain in Resend
 ```
 
-### Common SMTP Providers:
+### Resend Setup:
 
-**Gmail:**
-- Host: `smtp.gmail.com`
-- Port: `587` (TLS) or `465` (SSL)
-- Use App Password (not regular password)
+1. **Create a Resend account** at https://resend.com
+2. **Get your API key** from https://resend.com/api-keys
+3. **Verify your domain** in Resend dashboard (required for sending emails)
+4. **Set FROM_EMAIL** to an email address using your verified domain (e.g., `noreply@yourdomain.com`)
 - Enable 2FA first, then generate app password
 
 **Outlook/Office365:**

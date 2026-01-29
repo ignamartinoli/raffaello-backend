@@ -19,13 +19,9 @@ class Settings(BaseSettings):
         default=60, alias="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES"
     )
 
-    # SMTP Configuration (optional for now)
-    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
-    smtp_port: int | None = Field(default=None, alias="SMTP_PORT")
-    smtp_user: str | None = Field(default=None, alias="SMTP_USER")
-    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
-    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
-    smtp_from_email: str | None = Field(default=None, alias="SMTP_FROM_EMAIL")
+    # Resend Configuration
+    resend_api_key: str | None = Field(default=None, alias="RESEND_API_KEY")
+    resend_from_email: str | None = Field(default=None, alias="RESEND_FROM_EMAIL")
 
     # Frontend URL for password reset links
     frontend_url: str | None = Field(default=None, alias="FRONTEND_URL")
@@ -34,25 +30,16 @@ class Settings(BaseSettings):
     rapidapi_key: str | None = Field(default=None, alias="RAPIDAPI_KEY")
 
     @field_validator(
-        "smtp_host", "smtp_user", "smtp_password", "smtp_from_email", mode="before"
+        "resend_api_key", "resend_from_email", mode="before"
     )
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
-        """Convert empty strings to None for optional string fields."""
-        if v == "":
-            return None
-        return v
-
-    @field_validator("smtp_port", mode="before")
-    @classmethod
-    def empty_str_to_none_int(cls, v: str | int | None) -> int | None:
-        """Convert empty strings to None for optional integer fields."""
-        if v == "":
+        """Convert empty strings to None for optional string fields and strip whitespace."""
+        if v is None:
             return None
         if isinstance(v, str):
-            try:
-                return int(v)
-            except ValueError:
+            v = v.strip()
+            if v == "":
                 return None
         return v
 

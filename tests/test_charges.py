@@ -2725,10 +2725,10 @@ def test_send_charge_email_charge_not_found(client, db: Session, admin_token: st
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_send_charge_email_smtp_not_configured(
+def test_send_charge_email_resend_not_configured(
     client, db: Session, admin_token: str, contract, tenant_user_dict, apartment
 ):
-    """Test sending email when SMTP is not configured raises error."""
+    """Test sending email when Resend is not configured raises error."""
     from unittest.mock import patch
 
     # Create a visible charge
@@ -2751,11 +2751,11 @@ def test_send_charge_email_smtp_not_configured(
     assert create_response.status_code == 201
     charge_id = create_response.json()["id"]
 
-    # Mock the email service to raise ValueError (SMTP not configured)
+    # Mock the email service to raise ValueError (Resend not configured)
     with patch(
         "app.services.charge.send_charge_email_service",
         side_effect=ValueError(
-            "SMTP is not configured. Please configure SMTP settings in .env file."
+            "Resend is not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL in .env file."
         ),
     ):
         # Try to send email
@@ -2765,7 +2765,7 @@ def test_send_charge_email_smtp_not_configured(
         )
         assert response.status_code == 400
         assert (
-            "SMTP" in response.json()["detail"]
+            "Resend" in response.json()["detail"]
             or "not configured" in response.json()["detail"].lower()
         )
 
