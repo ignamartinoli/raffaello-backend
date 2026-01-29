@@ -4,6 +4,7 @@ from sqlalchemy import and_, extract
 
 from app.db.models.charge import Charge as ChargeModel
 from app.db.models.contract import Contract as ContractModel
+from app.db.models.user import User as UserModel
 from app.errors import NotFoundError
 
 
@@ -11,7 +12,7 @@ def get_charge_by_id(db: Session, charge_id: int) -> ChargeModel | None:
     """Get a charge by ID with contract relationship loaded."""
     return (
         db.query(ChargeModel)
-        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.user))
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.user).joinedload(UserModel.role))
         .options(joinedload(ChargeModel.contract).joinedload(ContractModel.apartment))
         .filter(ChargeModel.id == charge_id)
         .first()
@@ -26,7 +27,11 @@ def get_all_charges(
     apartment_id: int | None = None,
 ) -> list[ChargeModel]:
     """Get all charges, optionally filtered by year, month, unpaid status, and apartment ID."""
-    query = db.query(ChargeModel)
+    query = (
+        db.query(ChargeModel)
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.user).joinedload(UserModel.role))
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.apartment))
+    )
 
     if apartment_id is not None:
         query = query.join(ContractModel).filter(
@@ -70,6 +75,8 @@ def get_visible_charges_by_user_id(
     """
     query = (
         db.query(ChargeModel)
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.user).joinedload(UserModel.role))
+        .options(joinedload(ChargeModel.contract).joinedload(ContractModel.apartment))
         .join(ContractModel)
         .filter(and_(ContractModel.user_id == user_id, ChargeModel.is_visible == True))
     )

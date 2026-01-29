@@ -1,14 +1,21 @@
 from datetime import date
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models.contract import Contract as ContractModel
+from app.db.models.user import User as UserModel
 from app.domain.contract_activity import ContractActivityPolicy
 from app.errors import NotFoundError
 
 
 def get_contract_by_id(db: Session, contract_id: int) -> ContractModel | None:
-    """Get a contract by ID."""
-    return db.query(ContractModel).filter(ContractModel.id == contract_id).first()
+    """Get a contract by ID with user and apartment relationships loaded."""
+    return (
+        db.query(ContractModel)
+        .options(joinedload(ContractModel.user).joinedload(UserModel.role))
+        .options(joinedload(ContractModel.apartment))
+        .filter(ContractModel.id == contract_id)
+        .first()
+    )
 
 
 def get_all_contracts(db: Session) -> list[ContractModel]:
@@ -152,7 +159,9 @@ def get_all_contracts_paginated(
     total = query.count()
     skip = (page - 1) * page_size
     contracts = (
-        query.order_by(ContractModel.start_date.desc())
+        query.options(joinedload(ContractModel.user).joinedload(UserModel.role))
+        .options(joinedload(ContractModel.apartment))
+        .order_by(ContractModel.start_date.desc())
         .offset(skip)
         .limit(page_size)
         .all()
