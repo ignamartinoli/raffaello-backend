@@ -3,6 +3,9 @@
 Raffaello is a management system for the **Raffaello apartment complex**, which I manage for my family.  
 It is designed to help administrators, residents, and accountants track contracts, charges, and payments in a clear and structured way.
 
+This is the **frontend deployment URL**: https://raffaello-frontend.vercel.app
+This is the **backend deployment URL**: raffaello-backend-production.up.railway.app/docs
+
 ---
 
 ## How to run the project
